@@ -936,11 +936,23 @@ export const db = {
       emitUpdate();
     }
   },
+  unblockIp: (ip: string): void => {
+    if (typeof window === 'undefined') return;
+    const blocked = db.getBlockedIps().filter((b) => b !== ip);
+    localStorage.setItem('mktips_blocked_ips', JSON.stringify(blocked));
+    db.addLog('System', `IP ${ip} removido da blacklist.`, ip, 'Firewall', 'System');
+    emitUpdate();
+  },
+  clearOwnIpBan: (): void => {
+    if (typeof window === 'undefined') return;
+    const ip = db.getClientIp();
+    db.unblockIp(ip);
+  },
   getClientIp: (): string => {
     if (typeof window === 'undefined') return '127.0.0.1';
     let ip = localStorage.getItem('mktips_client_ip');
     if (!ip) {
-      ip = '177.45.198.24'; // Default mock client IP
+      ip = '127.0.0.1';
       localStorage.setItem('mktips_client_ip', ip);
     }
     return ip;
