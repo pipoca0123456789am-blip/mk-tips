@@ -844,6 +844,60 @@ export const db = {
     emitUpdate();
   },
 
+  addTicket: (input: {
+    subject: string;
+    description: string;
+    category?: string;
+    userName?: string;
+    userEmail?: string;
+  }): DBTicket => {
+    const sender =
+      input.userName && input.userEmail
+        ? `${input.userName} <${input.userEmail}>`
+        : input.userName || input.userEmail || 'Cliente';
+    const ticket: DBTicket = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `ticket-${Date.now()}`,
+      subject: input.subject.trim(),
+      category: input.category || input.userEmail || 'Suporte',
+      status: 'Aberto',
+      createdAt: new Date().toISOString(),
+      messages: [
+        {
+          sender,
+          text: input.description.trim(),
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+    const next = [ticket, ..._cache.tickets];
+    db.setTickets(next);
+    return ticket;
+  },
+
+  replyTicket: (ticketId: string, text: string, sender = 'Suporte MK Tips'): DBTicket | null => {
+    const tickets = _cache.tickets.map((t) => {
+      if (t.id !== ticketId) return t;
+      return {
+        ...t,
+        status: 'Respondido' as const,
+        messages: [
+          ...t.messages,
+          { sender, text: text.trim(), timestamp: new Date().toISOString() },
+        ],
+      };
+    });
+    const updated = tickets.find((t) => t.id === ticketId) || null;
+    if (updated) db.setTickets(tickets);
+    return updated;
+  },
+
+  updateTicketStatus: (ticketId: string, status: DBTicket['status']): void => {
+    const tickets = _cache.tickets.map((t) => (t.id === ticketId ? { ...t, status } : t));
+    db.setTickets(tickets);
+  },
+
   // --- Favorites (localStorage for session, write-through to Supabase) ---
   getFavorites: (): string[] => {
     if (typeof window === 'undefined') return [];

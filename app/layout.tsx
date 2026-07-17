@@ -65,6 +65,11 @@ export const metadata: Metadata = {
     apple: '/logo-mktips.png',
   },
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'MK TIPS',
+  },
 }
 
 export const viewport: Viewport = {

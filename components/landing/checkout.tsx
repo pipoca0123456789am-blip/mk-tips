@@ -199,6 +199,7 @@ export function Checkout({ initialPlan = 'Premium', onClose }: CheckoutProps) {
       db.setUsers([newUser, ...filtered])
       db.setActiveUser(newUser.id)
       localStorage.setItem('oddvault_user_session', 'true')
+      localStorage.setItem('oddvault_pwa_show_after_login', '1')
       db.addLog('Payment', `Pagamento aprovado via ${paymentMethod.toUpperCase()} para plano ${selectedPlan} (${email})`)
 
       setLoading(false)

@@ -1,9 +1,17 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { X, Smartphone, Bell, Check, Globe, Compass, Monitor, Apple } from 'lucide-react'
+import { X, Smartphone, Bell, Share2, MoreVertical, Download } from 'lucide-react'
 
-type OSTab = 'android' | 'ios' | 'windows' | 'macos'
+type DeviceKind = 'android' | 'ios' | 'desktop'
+
+function detectDevice(): DeviceKind {
+  if (typeof window === 'undefined') return 'android'
+  const ua = window.navigator.userAgent.toLowerCase()
+  if (/iphone|ipad|ipod/.test(ua)) return 'ios'
+  if (/android/.test(ua)) return 'android'
+  return 'desktop'
+}
 
 export function PwaInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
@@ -12,29 +20,29 @@ export function PwaInstallBanner() {
   const [isStandalone, setIsStandalone] = useState(false)
   const [showSplash, setShowSplash] = useState(false)
   const [snoozeChecked, setSnoozeChecked] = useState(false)
-  const [activeTab, setActiveTab] = useState<OSTab>('android')
+  const [device, setDevice] = useState<DeviceKind>('android')
+  const [installHint, setInstallHint] = useState('')
+  const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
-    // Detect if running in standalone mode (already installed)
-    const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone
+    const checkStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone
     setIsStandalone(!!checkStandalone)
+    setDevice(detectDevice())
 
-    // Splash screen animation logic when app is opened in standalone
     if (checkStandalone) {
       const splashShown = sessionStorage.getItem('oddvault_splash_shown')
       if (!splashShown) {
         setShowSplash(true)
         sessionStorage.setItem('oddvault_splash_shown', 'true')
-        const timer = setTimeout(() => {
-          setShowSplash(false)
-        }, 2000)
+        const timer = setTimeout(() => setShowSplash(false), 2000)
         return () => clearTimeout(timer)
       }
     }
   }, [])
 
   useEffect(() => {
-    // Only show install popup AFTER login
     const isLoggedIn = localStorage.getItem('oddvault_user_session') === 'true'
     const shouldPrompt = localStorage.getItem('oddvault_pwa_show_after_login') === '1'
     if (!isLoggedIn || !shouldPrompt) {
@@ -42,60 +50,26 @@ export function PwaInstallBanner() {
       return
     }
 
-    // Register Service Worker
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then((reg) => {
-          console.log('SW Registered:', reg)
-          reg.onupdatefound = () => {
-            const installingWorker = reg.installing;
-            if (installingWorker) {
-              installingWorker.onstatechange = () => {
-                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  window.location.reload()
-                }
-              }
-            }
-          }
-        })
-        .catch((err) => console.log('SW Registration Error:', err))
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
     }
 
-    // Check notification permission state
     if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'granted') {
-        setPushSubscribed(true)
-      }
+      if (Notification.permission === 'granted') setPushSubscribed(true)
     }
 
     const snoozeTime = localStorage.getItem('oddvault_pwa_snooze')
     const isSnoozed = snoozeTime && Date.now() < parseInt(snoozeTime)
     const isDismissed = localStorage.getItem('oddvault_pwa_dismissed')
 
-    // Detect OS for setting default tab
-    const userAgent = typeof window !== 'undefined' ? window.navigator.userAgent.toLowerCase() : ''
-    if (/iphone|ipad|ipod/.test(userAgent)) {
-      setActiveTab('ios')
-    } else if (/macintosh|mac os x/.test(userAgent)) {
-      setActiveTab('macos')
-    } else if (/windows|win32/.test(userAgent)) {
-      setActiveTab('windows')
-    } else {
-      setActiveTab('android')
-    }
-
-    // Install prompt listener (Android/Chrome/Windows)
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e)
-      if (!isDismissed && !isStandalone && !isSnoozed) {
-        setShowBanner(true)
-      }
+      if (!isDismissed && !isStandalone && !isSnoozed) setShowBanner(true)
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
 
-    // Show banner after login (all platforms), once
     if (!isStandalone && !isDismissed && !isSnoozed) {
       setShowBanner(true)
     }
@@ -110,16 +84,43 @@ export function PwaInstallBanner() {
   }
 
   const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt()
-      const { outcome } = await deferredPrompt.userChoice
-      if (outcome === 'accepted') {
-        setShowBanner(false)
-        clearLoginPromptFlag()
+    setInstallHint('')
+    setInstalling(true)
+
+    try {
+      if (deferredPrompt) {
+        deferredPrompt.prompt()
+        const { outcome } = await deferredPrompt.userChoice
+        setDeferredPrompt(null)
+        if (outcome === 'accepted') {
+          setShowBanner(false)
+          clearLoginPromptFlag()
+          setInstallHint('App instalado! Procure o ícone MK TIPS na tela inicial.')
+        } else {
+          setInstallHint('Instalação cancelada. Você pode tentar de novo quando quiser.')
+        }
+        return
       }
-      setDeferredPrompt(null)
-    } else {
-      alert('Siga as instruções passo a passo abaixo para adicionar à tela inicial!')
+
+      if (device === 'ios') {
+        setInstallHint(
+          'No iPhone: toque em Compartilhar (□↑) → “Adicionar à Tela de Início” → Adicionar. O app aparece na tela inicial.'
+        )
+        return
+      }
+
+      if (device === 'android') {
+        setInstallHint(
+          'No Android: menu (⋮) → “Instalar aplicativo” ou “Adicionar à tela inicial” → Instalar.'
+        )
+        return
+      }
+
+      setInstallHint(
+        'No Chrome/Edge: clique no ícone de instalar na barra de endereço (ou menu → Instalar MK TIPS).'
+      )
+    } finally {
+      setInstalling(false)
     }
   }
 
@@ -139,18 +140,15 @@ export function PwaInstallBanner() {
       return
     }
 
-    Notification.requestPermission().then(permission => {
+    Notification.requestPermission().then((permission) => {
       if (permission === 'granted') {
         setPushSubscribed(true)
-        alert('🔔 Notificações push ativadas com sucesso!')
         setTimeout(() => {
           new Notification('MK TIPS Premium', {
-            body: '🎯 Nova Tip Disponível! Real Madrid vs Man City - odd 1.91',
-            icon: '/icon.svg'
+            body: '🎯 Nova Tip Disponível!',
+            icon: '/logo-mktips.png',
           })
-        }, 3000)
-      } else {
-        alert('Permissão para notificações negada.')
+        }, 1500)
       }
     })
   }
@@ -166,7 +164,9 @@ export function PwaInstallBanner() {
           />
           <div>
             <h1 className="text-2xl font-black text-white tracking-wider">MK TIPS</h1>
-            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Tips Esportivas Premium</p>
+            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mt-1">
+              Tips Esportivas Premium
+            </p>
           </div>
         </div>
       </div>
@@ -189,131 +189,118 @@ export function PwaInstallBanner() {
     return null
   }
 
-  const instructions = {
-    android: [
-      'Abra a plataforma no Google Chrome.',
-      'Faça login normalmente.',
-      'Toque no menu de três pontos (⋮) no canto superior direito.',
-      'Toque em "Instalar aplicativo" ou "Adicionar à tela inicial".',
-      'Confirme clicando em "Instalar".'
-    ],
-    ios: [
-      'Abra a plataforma utilizando o Safari.',
-      'Faça login normalmente.',
-      'Toque no botão "Compartilhar" (ícone com seta para cima).',
-      'Escolha a opção "Adicionar à Tela de Início".',
-      'Confirme tocando em "Adicionar" no canto superior.'
-    ],
-    windows: [
-      'Abra a plataforma no Google Chrome ou Microsoft Edge.',
-      'Faça login normalmente.',
-      'Clique no ícone de monitor com seta na barra de endereço (lado direito).',
-      'Clique no botão "Instalar".',
-      'Pronto! Atalho adicionado ao Menu Iniciar e Desktop.'
-    ],
-    macos: [
-      'Abra a plataforma no Google Chrome ou Microsoft Edge.',
-      'Faça login normalmente.',
-      'Clique no ícone de instalação na barra de endereço.',
-      'Confirme clicando em "Instalar".',
-      'O aplicativo ficará disponível no Launchpad e pasta Aplicativos.'
-    ]
-  }
+  const steps =
+    device === 'ios'
+      ? [
+          { icon: Smartphone, text: 'Abra o site no Safari (não no Chrome).' },
+          { icon: Share2, text: 'Toque em Compartilhar (ícone □↑ na barra inferior).' },
+          { icon: Download, text: 'Role e toque em “Adicionar à Tela de Início”.' },
+          { icon: Smartphone, text: 'Toque em Adicionar — o app MK TIPS aparece na tela do celular.' },
+        ]
+      : device === 'android'
+        ? [
+            { icon: Smartphone, text: 'Use o Chrome no celular.' },
+            { icon: MoreVertical, text: 'Toque no menu (⋮) no canto superior.' },
+            { icon: Download, text: 'Toque em “Instalar aplicativo” ou “Adicionar à tela inicial”.' },
+            { icon: Smartphone, text: 'Confirme em Instalar — o ícone aparece na tela inicial.' },
+          ]
+        : [
+            { icon: Smartphone, text: 'Abra no Chrome ou Microsoft Edge.' },
+            { icon: Download, text: 'Clique no ícone de instalar na barra de endereço.' },
+            { icon: Smartphone, text: 'Confirme em Instalar — o atalho fica no desktop/menu iniciar.' },
+          ]
 
-  const tabsConfig = [
-    { key: 'android', label: 'Android', icon: Globe },
-    { key: 'ios', label: 'iPhone (iOS)', icon: Compass },
-    { key: 'windows', label: 'Windows', icon: Monitor },
-    { key: 'macos', label: 'macOS', icon: Apple }
-  ]
+  const canNativeInstall = !!deferredPrompt
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
-      <div className="w-full max-w-sm sm:max-w-md bg-zinc-950 border border-zinc-850 p-5 sm:p-6 rounded-xl sm:rounded-2xl shadow-2xl text-xs text-zinc-300 flex flex-col gap-3.5 sm:gap-4 animate-scale-in">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div className="flex gap-2.5">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 overflow-y-auto">
+      <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 p-5 sm:p-6 rounded-t-2xl sm:rounded-2xl shadow-2xl text-xs text-zinc-300 flex flex-col gap-4 animate-scale-in max-h-[92vh] overflow-y-auto">
+        <div className="flex justify-between items-start gap-3">
+          <div className="flex gap-3">
             <img
               src="/logo-mktips.png"
               alt="MK Tips"
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-emerald-500/20 shrink-0"
+              className="w-11 h-11 rounded-xl object-cover border border-emerald-500/20 shrink-0"
             />
             <div>
-              <h3 className="text-sm sm:text-base font-bold text-white">📲 Instale nosso aplicativo</h3>
-              <p className="text-[9.5px] sm:text-[10px] text-zinc-400 mt-1 leading-relaxed">
-                Tenha acesso mais rápido às tips, receba notificações em tempo real e acompanhe suas apostas com apenas um toque.
+              <h3 className="text-base font-bold text-white">Instale o app MK TIPS</h3>
+              <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                Siga o passo a passo e depois toque em Instalar. O app fica na tela do seu celular.
               </p>
             </div>
           </div>
-          <button onClick={handleDismiss} className="text-zinc-500 hover:text-white cursor-pointer -mt-1 -mr-1 p-1">
+          <button onClick={handleDismiss} className="text-zinc-500 hover:text-white cursor-pointer p-1 shrink-0">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Operating Systems Tabs */}
-        <div className="border-b border-zinc-900 pb-2">
-          <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block mb-2">Guia de Instalação Rápida</span>
-          <div className="flex gap-1 overflow-x-auto pb-1">
-            {tabsConfig.map(tab => {
-              const TabIcon = tab.icon
+        <div>
+          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block mb-2.5">
+            Passo a passo —{' '}
+            {device === 'ios' ? 'iPhone' : device === 'android' ? 'Android' : 'Computador'}
+          </span>
+          <div className="space-y-2.5">
+            {steps.map((step, idx) => {
+              const Icon = step.icon
               return (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key as OSTab)}
-                  className={`px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shrink-0 text-[10px] ${
-                    activeTab === tab.key
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                      : 'bg-zinc-900/40 border border-transparent text-zinc-400 hover:text-white'
-                  }`}
+                <div
+                  key={idx}
+                  className="flex gap-3 items-start bg-zinc-900/50 border border-zinc-800 rounded-xl p-3"
                 >
-                  <TabIcon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
+                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-black flex items-center justify-center text-[11px] font-black shrink-0">
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-zinc-200 leading-relaxed text-[12px]">{step.text}</p>
+                  </div>
+                  <Icon className="w-4 h-4 text-emerald-400/70 shrink-0 mt-0.5" />
+                </div>
               )
             })}
           </div>
         </div>
 
-        {/* Step by Step instructions list */}
-        <div className="bg-zinc-900/30 border border-zinc-850 p-4 rounded-xl space-y-2">
-          {instructions[activeTab].map((step, idx) => (
-            <div key={idx} className="flex gap-2 items-start">
-              <span className="w-4 h-4 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5">{idx + 1}</span>
-              <span className="text-zinc-300 leading-relaxed text-[10.5px]">{step}</span>
-            </div>
-          ))}
-        </div>
+        {installHint ? (
+          <div className="bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-[11px] leading-relaxed rounded-xl p-3">
+            {installHint}
+          </div>
+        ) : null}
 
-        {/* Dismiss snooze option */}
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2">
           <input
             type="checkbox"
             id="snooze"
             checked={snoozeChecked}
-            onChange={e => setSnoozeChecked(e.target.checked)}
-            className="w-4 h-4 rounded border-zinc-800 bg-zinc-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-950 cursor-pointer"
+            onChange={(e) => setSnoozeChecked(e.target.checked)}
+            className="w-4 h-4 rounded border-zinc-800 bg-zinc-900 text-emerald-500 cursor-pointer"
           />
-          <label htmlFor="snooze" className="text-zinc-400 font-medium select-none cursor-pointer">
-            Não mostrar novamente por 7 dias.
+          <label htmlFor="snooze" className="text-zinc-400 font-medium select-none cursor-pointer text-[11px]">
+            Não mostrar novamente por 7 dias
           </label>
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-2 pt-2 border-t border-zinc-900">
+        <div className="flex flex-col gap-2 pt-1 border-t border-zinc-900">
           <button
-            onClick={handleDismiss}
-            className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 font-bold rounded-xl cursor-pointer transition-colors"
+            type="button"
+            onClick={handleInstall}
+            disabled={installing}
+            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-black font-extrabold rounded-xl cursor-pointer transition-colors shadow-lg shadow-emerald-500/20 text-sm"
           >
-            Agora Não
+            {installing
+              ? 'Abrindo instalação…'
+              : canNativeInstall
+                ? 'Instalar no celular'
+                : device === 'ios'
+                  ? 'Já vi os passos — como instalar'
+                  : 'Instalar app'}
           </button>
-          {deferredPrompt && (
-            <button
-              onClick={handleInstall}
-              className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold rounded-xl cursor-pointer transition-colors shadow-lg shadow-emerald-500/15"
-            >
-              Instalar Agora
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleDismiss}
+            className="w-full py-2.5 bg-transparent text-zinc-500 hover:text-zinc-300 font-bold rounded-xl cursor-pointer transition-colors text-[11px]"
+          >
+            Agora não
+          </button>
         </div>
       </div>
     </div>

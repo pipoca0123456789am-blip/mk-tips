@@ -100,6 +100,7 @@ export const adminNavFlat: NavItem[] = [
   { label: 'CRM & Funis', href: '/mktipsadmin/dashboard/crm', icon: TrendingUp },
   { label: 'WhatsApp CRM', href: '/mktipsadmin/dashboard/crm/whatsapp', icon: MessageCircle },
   { label: 'Usuários', href: '/mktipsadmin/dashboard/users', icon: Users },
+  { label: 'Tickets Suporte', href: '/mktipsadmin/dashboard/support', icon: LifeBuoy },
   { label: 'Tipsters', href: '/mktipsadmin/dashboard/tipsters', icon: Award },
   { label: 'Tips Control', href: '/mktipsadmin/dashboard/tips', icon: Radio },
   { label: 'Casas de Apostas', href: '/mktipsadmin/dashboard/bookmakers', icon: Building },
@@ -113,8 +114,8 @@ export const adminNavFlat: NavItem[] = [
 
 export const adminNavGroups: NavGroup[] = [
   { title: 'Admin', items: adminNavFlat.slice(0, 5) },
-  { title: 'Operações', items: adminNavFlat.slice(5, 10) },
-  { title: 'Sistema', items: adminNavFlat.slice(10) },
+  { title: 'Operações', items: adminNavFlat.slice(5, 11) },
+  { title: 'Sistema', items: adminNavFlat.slice(11) },
 ]
 
 export const tipsterNavFlat: NavItem[] = [
