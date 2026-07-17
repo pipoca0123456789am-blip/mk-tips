@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { db } from '@/lib/db'
+import { captureReferralCodeFromUrl } from '@/lib/referral'
 import { 
   CreditCard, 
   QrCode, 
@@ -78,6 +79,7 @@ export default function CheckoutPage() {
     if (u) {
       const names = u.name.split(' ')
       setFirstName(names[0] || '')
+
       setLastName(names.slice(1).join(' ') || '')
       setEmail(u.email || '')
       setPhone(u.phone || '')
@@ -87,6 +89,7 @@ export default function CheckoutPage() {
 
     // Parse search parameters
     const params = new URLSearchParams(window.location.search)
+    captureReferralCodeFromUrl(window.location.search)
     const plan = params.get('plan')
     const challenge = params.get('challenge')
     const valetudo = params.get('valetudo')
@@ -336,13 +339,19 @@ export default function CheckoutPage() {
     }
 
     // 2. Deliver main product benefit
+    let resolvedPlan = activeUser.plan as string
     if (productType === 'plan') {
       const users = db.getUsers()
       const updated = users.map((u: any) => {
         if (u.id === activeUser.id) {
+          resolvedPlan = targetId.includes('starter')
+            ? 'Starter'
+            : targetId.includes('vip')
+              ? 'VIP Anual'
+              : 'Premium'
           return {
             ...u,
-            plan: targetId.includes('starter') ? 'Starter' : targetId.includes('vip') ? 'VIP Anual' : 'Premium',
+            plan: resolvedPlan,
             daysRemaining: targetId.includes('vip') ? 365 : 30
           }
         }
@@ -375,6 +384,15 @@ export default function CheckoutPage() {
         txId: transactionId || `TX-VEL-${Date.now().toString().slice(-6)}`
       }
       db.setWalletTransactions(activeUser.id, [newTx, ...txs])
+    }
+
+    // 3. Attribute affiliate referral if visitor came via ?ref=
+    if (productType === 'plan') {
+      db.attributePendingReferral({
+        id: activeUser.id,
+        name: activeUser.name || `${firstName} ${lastName}`.trim(),
+        plan: resolvedPlan || productName || 'Starter',
+      })
     }
   }
 

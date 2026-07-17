@@ -1,6 +1,13 @@
 'use client';
 
 import { supabase, isSupabaseConfigured } from './supabase';
+import {
+  getUserReferralCode,
+  buildReferralLink,
+  getPendingReferralCode,
+  clearPendingReferralCode,
+  findUserIdByReferralCode,
+} from './referral';
 
 // =============================================
 // Interfaces (mantidas idênticas)
@@ -753,10 +760,76 @@ export const db = {
   },
 
   // --- Referrals ---
-  getReferrals: (): any[] => _cache.referrals,
+  getReferrals: (userId?: string): any[] => {
+    if (!userId) return _cache.referrals
+    return _cache.referrals.filter(
+      (r: any) => r.referrer_id === userId || r.referrerId === userId,
+    )
+  },
   setReferrals: (list: any[]): void => {
-    _cache.referrals = list;
-    emitUpdate();
+    _cache.referrals = list
+    emitUpdate()
+  },
+  getReferralCode: (userId: string): string => getUserReferralCode(userId),
+  getReferralLink: (userId: string): string => buildReferralLink(userId),
+  addReferral: (payload: {
+    name: string
+    plan: string
+    status?: string
+    referrerId: string
+  }): void => {
+    const entry = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `ref_${Date.now()}`,
+      name: payload.name,
+      date: new Date().toISOString().slice(0, 10),
+      plan: payload.plan,
+      status: payload.status || 'Ativo',
+      referrer_id: payload.referrerId,
+      referrerId: payload.referrerId,
+      created_at: new Date().toISOString(),
+    }
+    _cache.referrals = [entry, ..._cache.referrals]
+    emitUpdate()
+    if (isSupabaseConfigured) {
+      supabase.from('referrals').insert({
+        id: entry.id,
+        name: entry.name,
+        date: entry.date,
+        plan: entry.plan,
+        status: entry.status,
+        referrer_id: entry.referrer_id,
+      }).then()
+    }
+  },
+  attributePendingReferral: (newUser: { id: string; name: string; plan: string }): boolean => {
+    if (typeof window === 'undefined') return false
+
+    const code = getPendingReferralCode()
+    if (!code) return false
+
+    const referrerId = findUserIdByReferralCode(_cache.users, code)
+    if (!referrerId || referrerId === newUser.id) {
+      clearPendingReferralCode()
+      return false
+    }
+
+    const already = _cache.referrals.some(
+      (r: any) =>
+        (r.referrer_id === referrerId || r.referrerId === referrerId) &&
+        r.name === newUser.name,
+    )
+    if (!already) {
+      db.addReferral({
+        name: newUser.name,
+        plan: newUser.plan,
+        status: 'Ativo',
+        referrerId,
+      })
+    }
+    clearPendingReferralCode()
+    return true
   },
 
   // --- Challenges (localStorage) ---

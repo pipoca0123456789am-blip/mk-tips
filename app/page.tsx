@@ -14,7 +14,7 @@ import { Testimonials } from '@/components/landing/testimonials'
 import { Faq } from '@/components/landing/faq'
 import { Cta } from '@/components/landing/cta'
 import { Footer } from '@/components/landing/footer'
-import { Checkout } from '@/components/landing/checkout'
+import { captureReferralCodeFromUrl } from '@/lib/referral'
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -39,6 +39,7 @@ const jsonLd = {
 export default function HomePage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      captureReferralCodeFromUrl()
       const params = new URLSearchParams(window.location.search)
       const p = params.get('plan')
       if (p) {
