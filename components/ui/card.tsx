@@ -6,7 +6,7 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function Card({ children, className = '', variant = 'default', ...props }: CardProps) {
-  const baseStyle = 'rounded-xl border transition-all duration-300'
+  const baseStyle = 'rounded-[18px] md:rounded-xl border transition-all duration-300'
   
   const variants = {
     default: 'bg-zinc-900/50 border-zinc-800 text-zinc-100 shadow-lg',
@@ -26,7 +26,7 @@ export function Card({ children, className = '', variant = 'default', ...props }
 
 export function CardHeader({ children, className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`p-6 pb-4 border-b border-zinc-800/50 ${className}`} {...props}>
+    <div className={`border-b border-zinc-800/50 p-4 pb-3 md:p-6 md:pb-4 ${className}`} {...props}>
       {children}
     </div>
   )
@@ -50,7 +50,7 @@ export function CardDescription({ children, className = '', ...props }: React.HT
 
 export function CardContent({ children, className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`p-6 ${className}`} {...props}>
+    <div className={`p-4 md:p-6 ${className}`} {...props}>
       {children}
     </div>
   )

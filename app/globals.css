@@ -169,3 +169,47 @@
     animation: marquee 40s linear infinite;
   }
 }
+
+/* MK Tips — Mobile dashboard utilities (md+ unchanged) */
+@media (max-width: 767px) {
+  .dashboard-main {
+    -webkit-overflow-scrolling: touch;
+    max-width: 100vw;
+  }
+
+  .dashboard-main .grid {
+    gap: 12px;
+  }
+
+  .dashboard-main input:not([type='checkbox']):not([type='radio']),
+  .dashboard-main select,
+  .dashboard-main textarea {
+    width: 100% !important;
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .dashboard-main button[type='submit'],
+  .dashboard-main .btn-mobile-full {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .dashboard-main table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dashboard-main .recharts-responsive-container,
+  .dashboard-main .recharts-wrapper,
+  .dashboard-main svg.recharts-surface {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .dashboard-main .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
