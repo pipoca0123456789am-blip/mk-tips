@@ -56,6 +56,8 @@ export default function CheckoutPage() {
   const [cardCvv, setCardCvv] = useState('')
   const [installments, setInstallments] = useState('1')
   const [detectedBrand, setDetectedBrand] = useState('Visa')
+  const [freePassword, setFreePassword] = useState('')
+  const [freePasswordConfirm, setFreePasswordConfirm] = useState('')
 
   // Upsell
   const [includeUpsell, setIncludeUpsell] = useState(false)
@@ -98,7 +100,10 @@ export default function CheckoutPage() {
     if (plan) {
       setProductType('plan')
       setTargetId(plan)
-      if (plan.toLowerCase().includes('starter')) {
+      if (plan.toLowerCase() === 'free' || plan.toLowerCase().includes('gratis') || plan.toLowerCase().includes('gratuito')) {
+        setProductName('Teste Grátis — 7 dias')
+        setBasePrice(0)
+      } else if (plan.toLowerCase().includes('starter')) {
         setProductName('Plano Starter Mensal')
         setBasePrice(49.90)
       } else if (plan.toLowerCase().includes('premium')) {
@@ -191,11 +196,68 @@ export default function CheckoutPage() {
     e.preventDefault()
     setLoadingPayment(true)
 
-    // Log target IP & details
     const userDevice = typeof window !== 'undefined' ? window.navigator.userAgent : 'Unknown'
-    const deviceIP = '177.45.198.24'
+    const deviceIP = db.getClientIp()
 
     try {
+      // FREE TRIAL — R$ 0, 7 days, no payment gateway
+      const isFreePlan =
+        productType === 'plan' &&
+        (targetId.toLowerCase() === 'free' ||
+          productName.toLowerCase().includes('grátis') ||
+          productName.toLowerCase().includes('gratis') ||
+          basePrice === 0)
+
+      if (isFreePlan) {
+        if (!firstName.trim() || !email.trim() || !freePassword) {
+          alert('Preencha nome, e-mail e senha para criar o teste grátis.')
+          setLoadingPayment(false)
+          return
+        }
+        if (freePassword.length < 6) {
+          alert('A senha precisa ter pelo menos 6 caracteres.')
+          setLoadingPayment(false)
+          return
+        }
+        if (freePassword !== freePasswordConfirm) {
+          alert('As senhas não coincidem.')
+          setLoadingPayment(false)
+          return
+        }
+
+        await db.refresh()
+        const exists = db.getUsers().some((u) => u.email.toLowerCase() === email.trim().toLowerCase())
+        if (exists) {
+          alert('Este e-mail já está cadastrado. Faça login.')
+          setLoadingPayment(false)
+          router.push('/login')
+          return
+        }
+
+        const newUser = db.createFreeTrialUser({
+          name: `${firstName} ${lastName}`.trim(),
+          email: email.trim(),
+          phone,
+          cpf,
+          password: freePassword,
+        })
+
+        db.attributePendingReferral({
+          id: newUser.id,
+          name: newUser.name,
+          plan: 'Free',
+        })
+
+        localStorage.setItem('oddvault_user_session', 'true')
+        localStorage.setItem('oddvault_pwa_show_after_login', '1')
+        db.setActiveUser(newUser.id)
+        db.addLog('Auth', `Conta Free Trial criada: ${newUser.email}`, deviceIP, userDevice, newUser.name)
+
+        setPaymentSuccess(true)
+        setLoadingPayment(false)
+        return
+      }
+
       // 1. Process via wallet if selected and has enough balance
       if (paymentMethod === 'wallet' && canPayFullyWithWallet) {
         // Debit fully from wallet
@@ -396,6 +458,13 @@ export default function CheckoutPage() {
     }
   }
 
+  const isFreeCheckout =
+    productType === 'plan' &&
+    (targetId.toLowerCase() === 'free' ||
+      productName.toLowerCase().includes('grátis') ||
+      productName.toLowerCase().includes('gratis') ||
+      basePrice === 0)
+
   if (paymentSuccess) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
@@ -404,8 +473,14 @@ export default function CheckoutPage() {
             <CheckCircle2 className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-xl font-bold text-white">Pagamento Confirmado!</h1>
-            <p className="text-xs text-zinc-400">Seu acesso e benefícios foram liberados de forma instantânea na sua conta.</p>
+            <h1 className="text-xl font-bold text-white">
+              {isFreeCheckout || finalPrice === 0 ? 'Teste Grátis Ativado!' : 'Pagamento Confirmado!'}
+            </h1>
+            <p className="text-xs text-zinc-400">
+              {isFreeCheckout || finalPrice === 0
+                ? 'Você tem 7 dias de acesso. Após o prazo a conta bloqueia automaticamente até o upgrade.'
+                : 'Seu acesso e benefícios foram liberados de forma instantânea na sua conta.'}
+            </p>
           </div>
           <div className="bg-zinc-900/40 p-4 rounded-lg border border-zinc-850 text-left space-y-2 text-xs">
             <div className="flex justify-between">
@@ -419,12 +494,10 @@ export default function CheckoutPage() {
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-zinc-550">Valor Pago:</span>
-              <strong className="text-emerald-400">R$ {finalPrice.toFixed(2)}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-550">Forma de Pagamento:</span>
-              <strong className="text-white uppercase">{paymentMethod === 'wallet' ? 'Saldo Carteira' : paymentMethod}</strong>
+              <span className="text-zinc-550">Valor:</span>
+              <strong className="text-emerald-400">
+                {finalPrice === 0 ? 'R$ 0,00 (7 dias grátis)' : `R$ ${finalPrice.toFixed(2)}`}
+              </strong>
             </div>
           </div>
           <button
@@ -577,7 +650,7 @@ export default function CheckoutPage() {
                     <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">CPF</label>
                     <input
                       type="text"
-                      required
+                      required={!isFreeCheckout}
                       placeholder="000.000.000-00"
                       value={cpf}
                       onChange={e => setCpf(e.target.value)}
@@ -588,13 +661,41 @@ export default function CheckoutPage() {
                     <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">Celular</label>
                     <input
                       type="text"
-                      required
+                      required={!isFreeCheckout}
                       placeholder="(11) 99999-9999"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
+                  {isFreeCheckout ? (
+                    <>
+                      <div>
+                        <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">Senha</label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          placeholder="Mínimo 6 caracteres"
+                          value={freePassword}
+                          onChange={e => setFreePassword(e.target.value)}
+                          className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">Confirmar Senha</label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          placeholder="Repita a senha"
+                          value={freePasswordConfirm}
+                          onChange={e => setFreePasswordConfirm(e.target.value)}
+                          className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                        />
+                      </div>
+                    </>
+                  ) : (
                   <div>
                     <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">CEP</label>
                     <input
@@ -606,10 +707,12 @@ export default function CheckoutPage() {
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Payment Methods Selection */}
+              {/* Payment Methods Selection — hidden for Free trial */}
+              {!isFreeCheckout && (
               <Card className="bg-zinc-950 border-zinc-855 text-xs">
                 <CardHeader>
                   <CardTitle className="text-sm font-bold text-white">2. Método de Pagamento</CardTitle>
@@ -742,9 +845,10 @@ export default function CheckoutPage() {
                   )}
                 </CardContent>
               </Card>
+              )}
 
               {/* Upsell Offer Card */}
-              {productType !== 'challenge' && (
+              {!isFreeCheckout && productType !== 'challenge' && (
                 <Card className="border-emerald-500/20 bg-gradient-to-r from-zinc-950 to-emerald-950/20 p-4 flex items-center justify-between gap-4">
                   <div className="flex gap-3">
                     <div className="w-10 h-10 bg-emerald-500/10 text-emerald-400 rounded-lg flex items-center justify-center border border-emerald-500/20 shrink-0">
@@ -774,7 +878,7 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 disabled={loadingPayment}
-                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-850 text-black font-extrabold rounded-xl text-sm transition-all shadow-xl shadow-emerald-500/10 flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full min-h-[48px] py-4 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-850 text-black font-extrabold rounded-xl text-sm transition-all shadow-xl shadow-emerald-500/10 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {loadingPayment ? (
                   <>
@@ -783,7 +887,7 @@ export default function CheckoutPage() {
                   </>
                 ) : (
                   <>
-                    Finalizar Pagamento Seguro
+                    {isFreeCheckout ? 'Ativar Teste Grátis (7 dias)' : 'Finalizar Pagamento Seguro'}
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

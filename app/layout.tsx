@@ -60,6 +60,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: SITE_URL,
   },
+  icons: {
+    icon: '/logo-mktips.png',
+    apple: '/logo-mktips.png',
+  },
   manifest: '/manifest.json',
 }
 

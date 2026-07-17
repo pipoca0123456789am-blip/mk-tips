@@ -19,8 +19,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     const handleUpdate = () => {
       const activeUser = db.getActiveUser()
-      setUser(activeUser)
-      setAllUsers(db.getUsers())
+      if (!activeUser?.id) return
+
+      // Auto-block Free trial after 7 days
+      if (db.isFreeTrialExpired(activeUser)) {
+        db.blockExpiredFreeUser(activeUser.id)
+        localStorage.removeItem('oddvault_user_session')
+        router.replace('/dashboard/subscription?expired=1')
+        return
+      }
+
+      if (activeUser.status === 'Bloqueado') {
+        router.replace('/dashboard/subscription?blocked=1')
+        return
+      }
+
+      const daysLeft = db.getFreeTrialDaysLeft(activeUser)
+      if (activeUser.plan === 'Free' && daysLeft !== activeUser.daysRemaining) {
+        db.setUsers(
+          db.getUsers().map((u) => (u.id === activeUser.id ? { ...u, daysRemaining: daysLeft } : u)),
+        )
+      }
+
+      setUser({ ...activeUser, daysRemaining: daysLeft })
+      // Never expose Master user list on mobile / public UI
+      setAllUsers(
+        activeUser.role === 'Master' ? db.getUsers().filter((u) => u.role !== 'Master') : [],
+      )
       setNotifications(db.getLogs().slice(0, 5))
     }
 
@@ -112,7 +137,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className="flex shrink-0 items-center gap-2 md:gap-4">
         {user.role === 'Master' && allUsers.length > 1 && (
-          <div className="flex items-center gap-1.5 rounded-lg border border-zinc-850 bg-zinc-900 px-2.5 py-1 text-[10px]">
+          <div className="hidden md:flex items-center gap-1.5 rounded-lg border border-zinc-850 bg-zinc-900 px-2.5 py-1 text-[10px]">
             <span className="hidden text-[8px] font-bold uppercase tracking-wider text-zinc-500 md:inline">
               Simulador:
             </span>
@@ -121,9 +146,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onChange={(e) => db.setActiveUser(e.target.value)}
               className="cursor-pointer border-none bg-transparent pr-5 text-[10px] font-bold text-white outline-none focus:ring-0"
             >
+              <option value={user.id} className="bg-zinc-950 font-bold text-white">
+                {user.name.split(' ')[0]} (você)
+              </option>
               {allUsers.map((u) => (
                 <option key={u.id} value={u.id} className="bg-zinc-950 font-bold text-white">
-                  {u.name.split(' ')[0]} ({u.role === 'Master' ? 'Admin' : u.role})
+                  {u.name.split(' ')[0]} ({u.role})
                 </option>
               ))}
             </select>

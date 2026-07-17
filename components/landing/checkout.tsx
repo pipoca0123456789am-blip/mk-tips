@@ -148,8 +148,10 @@ export function Checkout({ initialPlan = 'Premium', onClose }: CheckoutProps) {
         const users = db.getUsers()
         const filtered = users.filter(u => u.email !== email)
         db.setUsers([newUser, ...filtered])
+        db.setUserPassword(email, password)
         db.setActiveUser(newUser.id)
         localStorage.setItem('oddvault_user_session', 'true')
+        localStorage.setItem('oddvault_pwa_show_after_login', '1')
         db.addLog('System', `Conta de teste grátis criada para ${email}`)
 
         setLoading(false)

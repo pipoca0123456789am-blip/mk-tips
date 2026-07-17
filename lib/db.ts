@@ -601,11 +601,116 @@ export const db = {
       const found = _cache.users.find(u => u.id === activeId);
       if (found) return found;
     }
-    const first = _cache.users[0];
+    // Never auto-pick Master/Admin for anonymous sessions
+    const firstMember = _cache.users.find(u => u.role === 'User' || u.role === 'Tipster');
+    const first = firstMember || _cache.users[0];
     if (first) {
       localStorage.setItem(ACTIVE_USER_KEY, first.id);
     }
     return first || { id: '', name: 'Sem Usuário', email: '', phone: '', city: '', country: '', language: 'pt-BR', plan: 'Free' as const, role: 'User' as const, status: 'Ativo' as const, createdAt: '', lastLogin: '', lastLoginIp: '', device: '', os: '', browser: '', daysRemaining: 0, revenueGenerated: 0, totalPaid: 0, lastPaymentDate: '', bankroll: 0, bankrollCurrency: 'R$', roiIndividual: 0 };
+  },
+
+  setUserPassword: (email: string, password: string): void => {
+    if (typeof window === 'undefined') return;
+    const key = 'mktips_user_credentials';
+    const raw = localStorage.getItem(key);
+    const map = raw ? JSON.parse(raw) : {};
+    map[email.trim().toLowerCase()] = password;
+    localStorage.setItem(key, JSON.stringify(map));
+  },
+
+  loginWithCredentials: (
+    email: string,
+    password: string,
+  ): { ok: boolean; user?: DBUser; error?: string } => {
+    const normalized = email.trim().toLowerCase();
+    const user = _cache.users.find((u) => u.email.toLowerCase() === normalized);
+    if (!user) {
+      return { ok: false, error: 'E-mail ou senha incorretos.' };
+    }
+    // Never allow Master/Admin via public login page
+    if (['Master', 'Admin', 'Gerente'].includes(user.role)) {
+      return { ok: false, error: 'Use o painel administrativo para esta conta.' };
+    }
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem('mktips_user_credentials');
+      const map = raw ? JSON.parse(raw) : {};
+      const stored = map[normalized];
+      if (stored && stored !== password) {
+        return { ok: false, error: 'E-mail ou senha incorretos.' };
+      }
+      // If no password stored yet, require creating one via Free signup / register
+      if (!stored) {
+        return { ok: false, error: 'Conta sem senha. Crie o teste grátis ou redefina pelo suporte.' };
+      }
+    }
+    return { ok: true, user };
+  },
+
+  isFreeTrialExpired: (user: DBUser): boolean => {
+    if (user.plan !== 'Free') return false;
+    if (user.daysRemaining <= 0) return true;
+    if (!user.createdAt) return user.daysRemaining <= 0;
+    const start = new Date(user.createdAt).getTime();
+    if (Number.isNaN(start)) return user.daysRemaining <= 0;
+    const msLeft = start + 7 * 24 * 60 * 60 * 1000 - Date.now();
+    return msLeft <= 0;
+  },
+
+  getFreeTrialDaysLeft: (user: DBUser): number => {
+    if (user.plan !== 'Free') return user.daysRemaining;
+    if (!user.createdAt) return Math.max(0, user.daysRemaining);
+    const start = new Date(user.createdAt).getTime();
+    if (Number.isNaN(start)) return Math.max(0, user.daysRemaining);
+    const days = Math.ceil((start + 7 * 24 * 60 * 60 * 1000 - Date.now()) / (24 * 60 * 60 * 1000));
+    return Math.max(0, days);
+  },
+
+  blockExpiredFreeUser: (userId: string): void => {
+    const updated = _cache.users.map((u) =>
+      u.id === userId && u.plan === 'Free'
+        ? { ...u, status: 'Bloqueado' as const, daysRemaining: 0 }
+        : u,
+    );
+    db.setUsers(updated);
+  },
+
+  createFreeTrialUser: (payload: {
+    name: string;
+    email: string;
+    phone?: string;
+    cpf?: string;
+    password: string;
+  }): DBUser => {
+    const newUser: DBUser = {
+      id: crypto.randomUUID(),
+      name: payload.name,
+      email: payload.email.trim(),
+      phone: payload.phone || '',
+      city: '',
+      country: 'Brasil',
+      language: 'pt-BR',
+      plan: 'Free',
+      role: 'User',
+      status: 'Ativo',
+      createdAt: new Date().toISOString(),
+      lastLogin: new Date().toISOString(),
+      lastLoginIp: '0.0.0.0',
+      device: 'Web App',
+      os: '',
+      browser: '',
+      daysRemaining: 7,
+      revenueGenerated: 0,
+      totalPaid: 0,
+      lastPaymentDate: '',
+      bankroll: 0,
+      bankrollCurrency: 'R$',
+      roiIndividual: 0,
+      cpf: payload.cpf || '',
+    };
+    db.setUsers([..._cache.users, newUser]);
+    db.setUserPassword(newUser.email, payload.password);
+    return newUser;
   },
 
   setActiveUser: (id: string): void => {

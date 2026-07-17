@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { LogIn, Mail, Lock, ShieldCheck, ArrowRight } from 'lucide-react'
-import { db, DBUser } from '@/lib/db'
+import { LogIn, Mail, Lock, ArrowRight } from 'lucide-react'
+import { db } from '@/lib/db'
 
 export default function UserLoginPage() {
   const router = useRouter()
@@ -12,15 +13,6 @@ export default function UserLoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [availableUsers, setAvailableUsers] = useState<DBUser[]>([])
-
-  useEffect(() => {
-    const init = async () => {
-      await db.refresh()
-      setAvailableUsers(db.getUsers())
-    }
-    init()
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,38 +20,46 @@ export default function UserLoginPage() {
     setError('')
 
     try {
-      // Find user by email
-      const matchedUser = availableUsers.find(u => u.email.toLowerCase() === email.trim().toLowerCase())
-      if (matchedUser) {
-        localStorage.setItem('oddvault_user_session', 'true')
-        db.setActiveUser(matchedUser.id)
-        db.addLog('Auth', `Usuário ${matchedUser.name} logado com sucesso`, '127.0.0.1', 'Web App', matchedUser.name)
-        router.push('/dashboard')
-      } else {
-        setError('Nenhum usuário disponível para simulação. Tente novamente.')
+      await db.refresh()
+      const result = db.loginWithCredentials(email.trim(), password)
+      if (!result.ok || !result.user) {
+        setError(result.error || 'E-mail ou senha incorretos.')
+        return
       }
-    } catch (err) {
+
+      if (result.user.status === 'Bloqueado') {
+        setError('Sua conta está bloqueada. Renove sua assinatura para continuar.')
+        return
+      }
+
+      // Free trial expired → auto-block
+      if (db.isFreeTrialExpired(result.user)) {
+        db.blockExpiredFreeUser(result.user.id)
+        setError('Seu teste grátis de 7 dias expirou. Faça upgrade para continuar.')
+        return
+      }
+
+      localStorage.setItem('oddvault_user_session', 'true')
+      localStorage.setItem('oddvault_pwa_show_after_login', '1')
+      db.setActiveUser(result.user.id)
+      db.addLog('Auth', `Usuário ${result.user.name} logado com sucesso`, db.getClientIp(), 'Web App', result.user.name)
+      router.push('/dashboard')
+    } catch {
       setError('Erro ao realizar o login. Tente novamente.')
     } finally {
       setLoading(false)
     }
   }
 
-  const selectTestUser = (user: DBUser) => {
-    setEmail(user.email)
-    setPassword('••••••••')
-  }
-
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Decorative premium gradients */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#00E08A]/10 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
 
       <Card className="w-full max-w-md border-zinc-900 bg-zinc-950/80 backdrop-blur-md relative z-10">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 bg-[#00E08A]/10 border border-[#00E08A]/20 rounded-xl flex items-center justify-center">
-            <LogIn className="w-6 h-6 text-[#00E08A]" />
+          <div className="mx-auto w-12 h-12 rounded-xl border border-[#00E08A]/20 bg-[#00E08A]/10 overflow-hidden flex items-center justify-center">
+            <img src="/logo-mktips.png" alt="MK Tips" className="h-full w-full object-cover" />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-white">
             Acessar Plataforma
@@ -70,23 +70,24 @@ export default function UserLoginPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex gap-3 text-red-400 text-xs items-center">
-              <span>{error}</span>
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-xs">
+              {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="on">
             <div>
               <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
                 E-mail
               </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-505">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center">
                   <Mail className="w-4 h-4 text-zinc-500" />
                 </span>
                 <input
                   type="email"
                   required
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu-email@exemplo.com"
@@ -100,12 +101,13 @@ export default function UserLoginPage() {
                 Senha
               </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-505">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center">
                   <Lock className="w-4 h-4 text-zinc-500" />
                 </span>
                 <input
                   type="password"
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -117,12 +119,19 @@ export default function UserLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-[#00E08A] hover:bg-[#00E08A]/90 text-black font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#00E08A]/10 mt-2"
+              className="w-full min-h-[48px] py-3 bg-[#00E08A] hover:bg-[#00E08A]/90 disabled:opacity-50 text-black font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#00E08A]/10 mt-2"
             >
               {loading ? 'Entrando...' : 'Entrar na Conta'}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+
+          <p className="text-center text-[11px] text-zinc-500">
+            Não tem conta?{' '}
+            <Link href="/checkout?plan=Free" className="font-semibold text-emerald-400 hover:underline">
+              Criar teste grátis (7 dias)
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

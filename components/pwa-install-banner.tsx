@@ -34,6 +34,14 @@ export function PwaInstallBanner() {
   }, [])
 
   useEffect(() => {
+    // Only show install popup AFTER login
+    const isLoggedIn = localStorage.getItem('oddvault_user_session') === 'true'
+    const shouldPrompt = localStorage.getItem('oddvault_pwa_show_after_login') === '1'
+    if (!isLoggedIn || !shouldPrompt) {
+      setShowBanner(false)
+      return
+    }
+
     // Register Service Worker
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
@@ -87,8 +95,8 @@ export function PwaInstallBanner() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
 
-    // Manual detection for iOS since beforeinstallprompt is not supported
-    if (/iphone|ipad|ipod/.test(userAgent) && !isStandalone && !isDismissed && !isSnoozed) {
+    // Show banner after login (all platforms), once
+    if (!isStandalone && !isDismissed && !isSnoozed) {
       setShowBanner(true)
     }
 
@@ -97,26 +105,29 @@ export function PwaInstallBanner() {
     }
   }, [isStandalone])
 
+  const clearLoginPromptFlag = () => {
+    localStorage.removeItem('oddvault_pwa_show_after_login')
+  }
+
   const handleInstall = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt()
       const { outcome } = await deferredPrompt.userChoice
       if (outcome === 'accepted') {
         setShowBanner(false)
+        clearLoginPromptFlag()
       }
       setDeferredPrompt(null)
     } else {
-      // If manual install on iOS or other browsers
       alert('Siga as instruções passo a passo abaixo para adicionar à tela inicial!')
     }
   }
 
   const handleDismiss = () => {
+    clearLoginPromptFlag()
     if (snoozeChecked) {
-      // Snooze for 7 days
       localStorage.setItem('oddvault_pwa_snooze', (Date.now() + 7 * 24 * 60 * 60 * 1000).toString())
     } else {
-      // Permanent dismiss
       localStorage.setItem('oddvault_pwa_dismissed', 'true')
     }
     setShowBanner(false)
@@ -148,9 +159,11 @@ export function PwaInstallBanner() {
     return (
       <div className="fixed inset-0 bg-[#0c1210] z-[9999] flex flex-col items-center justify-center animate-fade-in">
         <div className="text-center space-y-4 animate-pulse">
-          <div className="w-20 h-20 bg-emerald-500 rounded-2xl flex items-center justify-center text-black shadow-lg shadow-emerald-500/20 mx-auto">
-            <Smartphone className="w-10 h-10" />
-          </div>
+          <img
+            src="/logo-mktips.png"
+            alt="MK Tips"
+            className="w-20 h-20 rounded-2xl object-cover shadow-lg shadow-emerald-500/20 mx-auto border border-emerald-500/20"
+          />
           <div>
             <h1 className="text-2xl font-black text-white tracking-wider">MK TIPS</h1>
             <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Tips Esportivas Premium</p>
@@ -220,9 +233,11 @@ export function PwaInstallBanner() {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div className="flex gap-2.5">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-              <Smartphone className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
+            <img
+              src="/logo-mktips.png"
+              alt="MK Tips"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-emerald-500/20 shrink-0"
+            />
             <div>
               <h3 className="text-sm sm:text-base font-bold text-white">📲 Instale nosso aplicativo</h3>
               <p className="text-[9.5px] sm:text-[10px] text-zinc-400 mt-1 leading-relaxed">
