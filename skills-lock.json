@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "crabbox": {
+      "source": "openclaw/wacli",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/crabbox/SKILL.md",
+      "computedHash": "c45b620b0d745176d789b82e96d7de81556fc15fdb1dcbf650171977dd5f6e40"
+    },
+    "design-intelligence": {
+      "source": "spartan-stratos/spartan-ai-toolkit",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/design-intelligence/SKILL.md",
+      "computedHash": "fd10096779f5859c8f2e3b8c3f4dae2dc01019832fa58916839d54a7fbf89735"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "781bd6d3f9b19f8c9af6b53d8d0e4876d0183841b565db34ca7092ffa412d111"
+    },
+    "wacli": {
+      "source": "openclaw/wacli",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/wacli/SKILL.md",
+      "computedHash": "19674522cace0aeb6916c6d2d8240a2b466a7c0ee3c6e0e075b92a0c0bb49ebc"
+    }
+  }
+}

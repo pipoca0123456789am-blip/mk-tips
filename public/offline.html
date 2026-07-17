@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline | OddVault</title>
+  <style>
+    body {
+      background-color: #0c1210;
+      color: #ffffff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      text-align: center;
+    }
+    h1 { color: #10b981; margin-bottom: 8px; }
+    p { color: #a1a1aa; font-size: 14px; max-width: 300px; line-height: 1.5; }
+    .btn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #10b981;
+      color: #000000;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Você está offline</h1>
+  <p>Verifique sua conexão com a internet para carregar as últimas tips esportivas.</p>
+  <button class="btn" onclick="window.location.reload()">Tentar Novamente</button>
+</body>
+</html>

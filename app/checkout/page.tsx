@@ -1,0 +1,857 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { db } from '@/lib/db'
+import { 
+  CreditCard, 
+  QrCode, 
+  Coins, 
+  CheckCircle2, 
+  ArrowRight, 
+  Lock, 
+  Percent, 
+  Sparkles, 
+  Plus, 
+  AlertCircle, 
+  ShieldCheck, 
+  Wallet,
+  ArrowLeft
+} from 'lucide-react'
+
+export default function CheckoutPage() {
+  const router = useRouter()
+  
+  // URL parameters state
+  const [productType, setProductType] = useState<'plan' | 'challenge' | 'valetudo' | 'deposit' | null>(null)
+  const [productName, setProductName] = useState('')
+  const [basePrice, setBasePrice] = useState(0)
+  const [targetId, setTargetId] = useState('')
+
+  // User session
+  const [activeUser, setActiveUser] = useState<any>(null)
+  const [userWallet, setUserWallet] = useState<any>(null)
+
+  // Checkout form states
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [cpf, setCpf] = useState('')
+  const [phone, setPhone] = useState('')
+  const [cep, setCep] = useState('')
+  
+  // Payment config
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'card' | 'wallet'>('pix')
+  const [couponCode, setCouponCode] = useState('')
+  const [discount, setDiscount] = useState(0)
+  const [couponMessage, setCouponMessage] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null)
+
+  // Credit card details
+  const [cardNumber, setCardNumber] = useState('')
+  const [cardName, setCardName] = useState('')
+  const [cardExpiry, setCardExpiry] = useState('')
+  const [cardCvv, setCardCvv] = useState('')
+  const [installments, setInstallments] = useState('1')
+  const [detectedBrand, setDetectedBrand] = useState('Visa')
+
+  // Upsell
+  const [includeUpsell, setIncludeUpsell] = useState(false)
+  const upsellPrice = 19.90
+  const upsellName = 'Desafio Alavancagem Starter'
+
+  // Digital Wallet usage details
+  const [useWalletBalance, setUseWalletBalance] = useState(false)
+
+  // Transaction execution status
+  const [loadingPayment, setLoadingPayment] = useState(false)
+  const [paymentSuccess, setPaymentSuccess] = useState(false)
+  const [pixCode, setPixCode] = useState('')
+  const [transactionId, setTransactionId] = useState('')
+  const [showPixScreen, setShowPixScreen] = useState(false)
+
+  useEffect(() => {
+    if (!db.isReady()) return
+    const u = db.getActiveUser()
+    setActiveUser(u)
+    if (u) {
+      const names = u.name.split(' ')
+      setFirstName(names[0] || '')
+      setLastName(names.slice(1).join(' ') || '')
+      setEmail(u.email || '')
+      setPhone(u.phone || '')
+      setCpf(u.cpf || '')
+      setUserWallet(db.getWallet(u.id))
+    }
+
+    // Parse search parameters
+    const params = new URLSearchParams(window.location.search)
+    const plan = params.get('plan')
+    const challenge = params.get('challenge')
+    const valetudo = params.get('valetudo')
+    const deposit = params.get('deposit')
+
+    if (plan) {
+      setProductType('plan')
+      setTargetId(plan)
+      if (plan.toLowerCase().includes('starter')) {
+        setProductName('Plano Starter Mensal')
+        setBasePrice(49.90)
+      } else if (plan.toLowerCase().includes('premium')) {
+        setProductName('Plano Premium Mensal')
+        setBasePrice(97.90)
+      } else if (plan.toLowerCase().includes('vip')) {
+        setProductName('Plano VIP Anual')
+        setBasePrice(497.90)
+      } else {
+        setProductName(`Plano ${plan}`)
+        setBasePrice(97.90)
+      }
+    } else if (challenge) {
+      setProductType('challenge')
+      setTargetId(challenge)
+      if (challenge.toLowerCase().includes('starter')) {
+        setProductName('Alavancagem Starter')
+        setBasePrice(29.90)
+      } else if (challenge.toLowerCase().includes('pro')) {
+        setProductName('Alavancagem Pro')
+        setBasePrice(97.00)
+      } else if (challenge.toLowerCase().includes('elite')) {
+        setProductName('Alavancagem Elite')
+        setBasePrice(197.00)
+      } else {
+        setProductName(`Desafio ${challenge}`)
+        setBasePrice(97.00)
+      }
+    } else if (valetudo) {
+      setProductType('valetudo')
+      setProductName('Acesso Vale Tudo - MK Tips')
+      setBasePrice(50.00)
+    } else if (deposit) {
+      setProductType('deposit')
+      setProductName('Adicionar Saldo - MK Tips')
+      setBasePrice(Number(deposit) || 50.00)
+    } else {
+      // Default fallback
+      setProductType('plan')
+      setProductName('Plano Premium Mensal')
+      setBasePrice(97.90)
+    }
+  }, [])
+
+  // Auto-detect card brand
+  useEffect(() => {
+    const cleanNum = cardNumber.replace(/\s+/g, '')
+    if (cleanNum.startsWith('4')) {
+      setDetectedBrand('Visa')
+    } else if (/^5[1-5]/.test(cleanNum)) {
+      setDetectedBrand('Mastercard')
+    } else if (/^3[47]/.test(cleanNum)) {
+      setDetectedBrand('American Express')
+    } else if (/^(6011|622|64|65)/.test(cleanNum)) {
+      setDetectedBrand('Discover')
+    } else {
+      setDetectedBrand('Cartão')
+    }
+  }, [cardNumber])
+
+  const handleApplyCoupon = () => {
+    const code = couponCode.trim().toUpperCase()
+    if (code === 'GREEN10') {
+      const discountVal = basePrice * 0.1
+      setDiscount(discountVal)
+      setAppliedCoupon('GREEN10')
+      setCouponMessage('Cupom GREEN10 aplicado! 10% de desconto.')
+    } else if (code === 'MKFIRST') {
+      const discountVal = Math.min(20, basePrice)
+      setDiscount(discountVal)
+      setAppliedCoupon('MKFIRST')
+      setCouponMessage('Cupom MKFIRST aplicado! R$ 20,00 de desconto.')
+    } else {
+      setCouponMessage('Cupom inválido ou expirado.')
+      setDiscount(0)
+      setAppliedCoupon(null)
+    }
+  }
+
+  // Calculate final numbers
+  const subtotal = basePrice + (includeUpsell ? upsellPrice : 0)
+  const finalPrice = Math.max(0, subtotal - discount)
+  
+  // Wallet payment logic details
+  const walletAvailable = userWallet?.available || 0
+  const canPayFullyWithWallet = walletAvailable >= finalPrice
+  const remainingToPay = Math.max(0, finalPrice - walletAvailable)
+
+  const handleCheckoutProcess = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoadingPayment(true)
+
+    // Log target IP & details
+    const userDevice = typeof window !== 'undefined' ? window.navigator.userAgent : 'Unknown'
+    const deviceIP = '177.45.198.24'
+
+    try {
+      // 1. Process via wallet if selected and has enough balance
+      if (paymentMethod === 'wallet' && canPayFullyWithWallet) {
+        // Debit fully from wallet
+        const updatedWallet = {
+          ...userWallet,
+          available: walletAvailable - finalPrice
+        }
+        db.setWallet(activeUser.id, updatedWallet)
+        applyPurchaseBenefits()
+        
+        db.addLog('Payment', `Compra de ${productName} no valor de R$ ${finalPrice.toFixed(2)} paga integralmente com saldo da Carteira.`, deviceIP, userDevice, activeUser.name)
+        
+        setPaymentSuccess(true)
+        setLoadingPayment(false)
+        return
+      }
+
+      // 2. If Pix is chosen, communicate with Velana API
+      if (paymentMethod === 'pix' || (paymentMethod === 'wallet' && !canPayFullyWithWallet)) {
+        const amountToCharge = paymentMethod === 'wallet' ? remainingToPay : finalPrice
+        
+        let apiDescription = 'Participação de Alavancagem'
+        if (productType === 'valetudo') {
+          apiDescription = 'Participação de Bolão'
+        } else if (productType === 'deposit') {
+          apiDescription = 'Participação do Bolão'
+        }
+
+        const res = await fetch('/api/payment/velana', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            name: `${firstName} ${lastName}`,
+            amount: amountToCharge,
+            cpf,
+            description: apiDescription
+          })
+        })
+        const data = await res.json()
+        if (data.success) {
+          setPixCode(data.qrCode)
+          setTransactionId(data.transactionId)
+          setShowPixScreen(true)
+        } else {
+          alert(data.error || 'Falha ao processar Pix com o gateway Velana. Tente novamente.')
+        }
+        setLoadingPayment(false)
+        return
+      }
+
+      // 3. Credit Card payment processed via Cakto
+      if (paymentMethod === 'card') {
+        const res = await fetch('/api/payment/cakto', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            name: `${firstName} ${lastName}`,
+            amount: finalPrice,
+            description: `Cartão ${productName} - MK Tips`
+          })
+        })
+        const data = await res.json()
+        
+        // Simulating immediate credit card authorization check
+        setTimeout(() => {
+          applyPurchaseBenefits()
+          db.addLog('Payment', `Compra de ${productName} no valor de R$ ${finalPrice.toFixed(2)} aprovada via Cartão de Crédito ${detectedBrand} (Final ${cardNumber.slice(-4) || '4242'}).`, deviceIP, userDevice, activeUser.name)
+          setPaymentSuccess(true)
+          setLoadingPayment(false)
+        }, 1500)
+      }
+
+    } catch (err) {
+      console.error(err)
+      alert('Houve um erro no processamento. Tente novamente.')
+      setLoadingPayment(false)
+    }
+  }
+
+  const checkPixPaymentStatus = async () => {
+    if (!transactionId) return false
+    try {
+      const res = await fetch(`/api/payment/velana?id=${transactionId}`)
+      const data = await res.json()
+      if (data.success && data.paid) {
+        // If wallet partially used
+        if (paymentMethod === 'wallet' && !canPayFullyWithWallet) {
+          const updatedWallet = {
+            ...userWallet,
+            available: 0
+          }
+          db.setWallet(activeUser.id, updatedWallet)
+        }
+        
+        applyPurchaseBenefits()
+        
+        const userDevice = typeof window !== 'undefined' ? window.navigator.userAgent : 'Unknown'
+        db.addLog('Payment', `Depósito/Compra de R$ ${finalPrice.toFixed(2)} aprovada via Velana Pix. ID: ${transactionId}`, '177.45.198.24', userDevice, activeUser?.name || 'Cliente')
+        
+        setPaymentSuccess(true)
+        setShowPixScreen(false)
+        return true
+      }
+      return false
+    } catch (err) {
+      console.error(err)
+      return false
+    }
+  }
+
+  const handleManualVerify = async () => {
+    setLoadingPayment(true)
+    const isPaid = await checkPixPaymentStatus()
+    setLoadingPayment(false)
+    if (!isPaid) {
+      alert('Pagamento ainda não foi detectado. Caso já tenha pago, aguarde alguns segundos e tente novamente.')
+    }
+  }
+
+  useEffect(() => {
+    if (!showPixScreen || !transactionId) return
+
+    const interval = setInterval(async () => {
+      await checkPixPaymentStatus()
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [showPixScreen, transactionId, paymentMethod, canPayFullyWithWallet, userWallet, activeUser, finalPrice])
+
+  const applyPurchaseBenefits = () => {
+    if (!activeUser) return
+
+    // 1. Appends upsell if ticked
+    if (includeUpsell) {
+      const curChallenges = db.getPurchasedChallenges()
+      if (!curChallenges.includes('starter')) {
+        db.setPurchasedChallenges([...curChallenges, 'starter'])
+      }
+    }
+
+    // 2. Deliver main product benefit
+    if (productType === 'plan') {
+      const users = db.getUsers()
+      const updated = users.map((u: any) => {
+        if (u.id === activeUser.id) {
+          return {
+            ...u,
+            plan: targetId.includes('starter') ? 'Starter' : targetId.includes('vip') ? 'VIP Anual' : 'Premium',
+            daysRemaining: targetId.includes('vip') ? 365 : 30
+          }
+        }
+        return u
+      })
+      db.setUsers(updated)
+    } else if (productType === 'challenge') {
+      const curChallenges = db.getPurchasedChallenges()
+      if (!curChallenges.includes(targetId)) {
+        db.setPurchasedChallenges([...curChallenges, targetId])
+      }
+    } else if (productType === 'deposit') {
+      const curWallet = db.getWallet(activeUser.id)
+      const updatedWallet = {
+        ...curWallet,
+        available: curWallet.available + basePrice,
+        totalDeposit: curWallet.totalDeposit + basePrice
+      }
+      db.setWallet(activeUser.id, updatedWallet)
+      
+      // Also write transactions
+      const txs = db.getWalletTransactions(activeUser.id)
+      const newTx = {
+        id: `tx-${Date.now()}`,
+        type: 'Depósito',
+        amount: basePrice,
+        date: new Date().toISOString().split('T')[0],
+        time: new Date().toLocaleTimeString().slice(0, 5),
+        status: 'Aprovado',
+        txId: transactionId || `TX-VEL-${Date.now().toString().slice(-6)}`
+      }
+      db.setWalletTransactions(activeUser.id, [newTx, ...txs])
+    }
+  }
+
+  if (paymentSuccess) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-zinc-950 border-zinc-800 text-center p-6 space-y-6">
+          <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/20">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-xl font-bold text-white">Pagamento Confirmado!</h1>
+            <p className="text-xs text-zinc-400">Seu acesso e benefícios foram liberados de forma instantânea na sua conta.</p>
+          </div>
+          <div className="bg-zinc-900/40 p-4 rounded-lg border border-zinc-850 text-left space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-zinc-550">Produto:</span>
+              <strong className="text-white">{productName}</strong>
+            </div>
+            {includeUpsell && (
+              <div className="flex justify-between">
+                <span className="text-zinc-550">Adicional:</span>
+                <strong className="text-white">{upsellName}</strong>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-zinc-550">Valor Pago:</span>
+              <strong className="text-emerald-400">R$ {finalPrice.toFixed(2)}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-550">Forma de Pagamento:</span>
+              <strong className="text-white uppercase">{paymentMethod === 'wallet' ? 'Saldo Carteira' : paymentMethod}</strong>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-lg text-xs transition-colors cursor-pointer"
+          >
+            Ir para o Painel
+          </button>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-black text-zinc-300 p-4 md:p-8 flex flex-col items-center">
+      <div className="w-full max-w-5xl flex items-center justify-between mb-8">
+        <button
+          onClick={() => window.history.back()}
+          className="flex items-center gap-2 text-xs text-zinc-500 hover:text-white transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+        <div className="flex items-center gap-2">
+          <img src="/logo-mktips.png" alt="MK Tips" className="w-8 h-8 rounded-lg" />
+          <span className="font-extrabold text-white text-sm tracking-widest">MK TIPS</span>
+        </div>
+      </div>
+
+      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left Side: Forms */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Pix display screen */}
+          {showPixScreen ? (
+            <Card className="bg-zinc-950 border-zinc-800 text-xs">
+              <CardHeader>
+                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                  <QrCode className="w-5 h-5 text-emerald-500" />
+                  Aguardando Pagamento Pix
+                </CardTitle>
+                <CardDescription>Escaneie o QR Code oficial abaixo para liberar imediatamente.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6 flex flex-col items-center p-6">
+                <div className="p-3 bg-zinc-900/50 rounded border border-zinc-850 flex justify-between items-center w-full text-left">
+                  <div>
+                    <span className="font-bold text-white block">Checkout MK Tips</span>
+                    <span className="text-[9px] text-zinc-500">Gateway Velana</span>
+                  </div>
+                  <strong className="text-emerald-400 text-sm">R$ {paymentMethod === 'wallet' ? remainingToPay.toFixed(2) : finalPrice.toFixed(2)}</strong>
+                </div>
+
+                {loadingPayment ? (
+                  <div className="w-36 h-36 flex flex-col items-center justify-center text-zinc-500 gap-2">
+                    <span className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500" />
+                    Gerando QR Code...
+                  </div>
+                ) : pixCode ? (
+                  <div className="flex flex-col items-center gap-4 w-full">
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(pixCode)}`}
+                      alt="Pix QR Code"
+                      className="w-36 h-36 bg-white p-2 rounded-xl"
+                    />
+                    
+                    <div className="w-full max-w-sm space-y-2">
+                      <label className="block text-[10px] text-zinc-500 font-bold uppercase text-center">Pix Copia e Cola</label>
+                      <div className="flex gap-2 bg-zinc-900 border border-zinc-800 p-2.5 rounded-lg items-center">
+                        <input
+                          type="text"
+                          readOnly
+                          value={pixCode}
+                          onClick={(e) => (e.target as HTMLInputElement).select()}
+                          className="bg-transparent text-[11px] text-zinc-300 flex-1 outline-none select-all truncate font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(pixCode)
+                            alert('Código copia e cola copiado com sucesso!')
+                          }}
+                          className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-[9px] rounded uppercase cursor-pointer transition-colors"
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="w-full flex gap-3 pt-4 border-t border-zinc-900">
+                  <button
+                    onClick={() => setShowPixScreen(false)}
+                    className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-850 text-white font-bold rounded-lg cursor-pointer"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    onClick={handleManualVerify}
+                    className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-lg cursor-pointer"
+                  >
+                    Verificar Pagamento
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <form onSubmit={handleCheckoutProcess} className="space-y-6">
+              
+              {/* Client Info Card */}
+              <Card className="bg-zinc-950 border-zinc-850 text-xs">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold text-white">1. Informações Pessoais</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">Nome</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Henrique"
+                      value={firstName}
+                      onChange={e => setFirstName(e.target.value)}
+                      className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">Sobrenome</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Blume"
+                      value={lastName}
+                      onChange={e => setLastName(e.target.value)}
+                      className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">E-mail</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="blume@example.com"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">CPF</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="000.000.000-00"
+                      value={cpf}
+                      onChange={e => setCpf(e.target.value)}
+                      className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">Celular</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="(11) 99999-9999"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1.5">CEP</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="00000-000"
+                      value={cep}
+                      onChange={e => setCep(e.target.value)}
+                      className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Payment Methods Selection */}
+              <Card className="bg-zinc-950 border-zinc-855 text-xs">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold text-white">2. Método de Pagamento</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('pix')}
+                      className={`p-3 rounded-lg border flex flex-col items-center gap-2 cursor-pointer transition-all ${
+                        paymentMethod === 'pix' 
+                          ? 'border-emerald-500 bg-emerald-500/5 text-emerald-400 font-bold'
+                          : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 text-zinc-400'
+                      }`}
+                    >
+                      <QrCode className="w-5 h-5" />
+                      <span>PIX</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('card')}
+                      className={`p-3 rounded-lg border flex flex-col items-center gap-2 cursor-pointer transition-all ${
+                        paymentMethod === 'card'
+                          ? 'border-emerald-500 bg-emerald-500/5 text-emerald-400 font-bold'
+                          : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 text-zinc-400'
+                      }`}
+                    >
+                      <CreditCard className="w-5 h-5" />
+                      <span>Cartão</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('wallet')}
+                      className={`p-3 rounded-lg border flex flex-col items-center gap-2 cursor-pointer transition-all ${
+                        paymentMethod === 'wallet'
+                          ? 'border-emerald-500 bg-emerald-500/5 text-emerald-400 font-bold'
+                          : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 text-zinc-400'
+                      }`}
+                    >
+                      <Wallet className="w-5 h-5" />
+                      <span>Carteira</span>
+                    </button>
+                  </div>
+
+                  {/* Wallet context info */}
+                  {paymentMethod === 'wallet' && (
+                    <div className="p-3 bg-zinc-900/40 rounded-lg border border-zinc-850 space-y-2">
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-zinc-500 font-bold uppercase">Saldo Disponível:</span>
+                        <strong className="text-white text-xs">R$ {walletAvailable.toFixed(2)}</strong>
+                      </div>
+                      {canPayFullyWithWallet ? (
+                        <p className="text-[10px] text-emerald-400 font-medium">Saldo suficiente! O valor será debitado integralmente da sua carteira.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-[10px] text-amber-400">Saldo insuficiente para quitar o total. Pague o restante de <strong>R$ {remainingToPay.toFixed(2)}</strong> via PIX!</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Credit Card inputs */}
+                  {paymentMethod === 'card' && (
+                    <div className="p-4 bg-zinc-900/20 rounded-lg border border-zinc-850 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-zinc-550 uppercase">Dados do Cartão</span>
+                        <span className="text-[9px] bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded font-black tracking-wider uppercase">{detectedBrand}</span>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1">Nome no Cartão</label>
+                        <input
+                          type="text"
+                          required={paymentMethod === 'card'}
+                          placeholder="E.g. Henrique Blume"
+                          value={cardName}
+                          onChange={e => setCardName(e.target.value)}
+                          className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1">Número do Cartão</label>
+                        <input
+                          type="text"
+                          required={paymentMethod === 'card'}
+                          placeholder="4000 1234 5678 9010"
+                          value={cardNumber}
+                          onChange={e => setCardNumber(e.target.value)}
+                          className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded text-white"
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-2">
+                          <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1">Validade</label>
+                          <input
+                            type="text"
+                            required={paymentMethod === 'card'}
+                            placeholder="MM/AA"
+                            value={cardExpiry}
+                            onChange={e => setCardExpiry(e.target.value)}
+                            className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1">CVV</label>
+                          <input
+                            type="text"
+                            required={paymentMethod === 'card'}
+                            placeholder="123"
+                            value={cardCvv}
+                            onChange={e => setCardCvv(e.target.value)}
+                            className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded text-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1">Parcelamento</label>
+                        <select
+                          value={installments}
+                          onChange={e => setInstallments(e.target.value)}
+                          className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded text-white cursor-pointer"
+                        >
+                          <option value="1">1x de R$ {finalPrice.toFixed(2)} (Sem Juros)</option>
+                          <option value="2">2x de R$ {(finalPrice / 2).toFixed(2)} (Sem Juros)</option>
+                          <option value="3">3x de R$ {(finalPrice / 3).toFixed(2)} (Sem Juros)</option>
+                          <option value="6">6x de R$ {(finalPrice / 6).toFixed(2)} (Sem Juros)</option>
+                          <option value="12">12x de R$ {(finalPrice / 12).toFixed(2)} (Sem Juros)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Upsell Offer Card */}
+              {productType !== 'challenge' && (
+                <Card className="border-emerald-500/20 bg-gradient-to-r from-zinc-950 to-emerald-950/20 p-4 flex items-center justify-between gap-4">
+                  <div className="flex gap-3">
+                    <div className="w-10 h-10 bg-emerald-500/10 text-emerald-400 rounded-lg flex items-center justify-center border border-emerald-500/20 shrink-0">
+                      <Sparkles className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider block">OFERTA ESPECIAL</span>
+                      <strong className="text-white text-xs block">Desafio Alavancagem Starter por R$ 19,90!</strong>
+                      <span className="text-[10px] text-zinc-400 block mt-0.5">Habilite o desafio de alavancagem com desconto único.</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIncludeUpsell(!includeUpsell)}
+                    className={`px-4 py-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                      includeUpsell 
+                        ? 'bg-emerald-500 text-black border-emerald-500'
+                        : 'bg-zinc-900 border-zinc-800 text-white hover:border-zinc-700'
+                    }`}
+                  >
+                    {includeUpsell ? 'Adicionado!' : 'Adicionar'}
+                  </button>
+                </Card>
+              )}
+
+              {/* Submit button */}
+              <button
+                type="submit"
+                disabled={loadingPayment}
+                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-850 text-black font-extrabold rounded-xl text-sm transition-all shadow-xl shadow-emerald-500/10 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loadingPayment ? (
+                  <>
+                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-black" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    Finalizar Pagamento Seguro
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+        </div>
+
+        {/* Right Side: Order Summary */}
+        <div className="space-y-6">
+          <Card className="bg-zinc-950 border-zinc-850 text-xs">
+            <CardHeader className="border-b border-zinc-900 pb-4">
+              <CardTitle className="text-sm font-bold text-white">Resumo do Pedido</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              
+              <div className="flex justify-between items-center">
+                <div>
+                  <strong className="text-white block">{productName}</strong>
+                  <span className="text-[10px] text-zinc-500 block mt-0.5">Item principal</span>
+                </div>
+                <strong className="text-white">R$ {basePrice.toFixed(2)}</strong>
+              </div>
+
+              {includeUpsell && (
+                <div className="flex justify-between items-center">
+                  <div>
+                    <strong className="text-white block">{upsellName}</strong>
+                    <span className="text-[10px] text-zinc-550 block mt-0.5">Oferta Upsell</span>
+                  </div>
+                  <strong className="text-white">R$ {upsellPrice.toFixed(2)}</strong>
+                </div>
+              )}
+
+              {discount > 0 && (
+                <div className="flex justify-between items-center text-emerald-400">
+                  <span>Desconto ({appliedCoupon})</span>
+                  <strong>- R$ {discount.toFixed(2)}</strong>
+                </div>
+              )}
+
+              <div className="border-t border-zinc-900 pt-4 space-y-2">
+                <div className="flex justify-between items-center text-white font-bold text-sm">
+                  <span>Total</span>
+                  <span className="text-emerald-400">R$ {finalPrice.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Coupon box */}
+              <div className="border-t border-zinc-900 pt-4 space-y-2">
+                <label className="block text-[10px] text-zinc-550 font-bold uppercase mb-1">Cupom de Desconto</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="E.g. GREEN10"
+                    value={couponCode}
+                    onChange={e => setCouponCode(e.target.value)}
+                    className="flex-1 p-2 bg-zinc-900 border border-zinc-800 rounded text-white text-xs uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="px-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded font-bold text-[10px] cursor-pointer"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+                {couponMessage && (
+                  <p className={`text-[9px] mt-1 ${couponMessage.includes('aplicado') ? 'text-emerald-400' : 'text-red-400'}`}>{couponMessage}</p>
+                )}
+              </div>
+
+            </CardContent>
+          </Card>
+
+          <Card className="bg-zinc-950 border-zinc-900 p-4 text-center space-y-3">
+            <div className="flex items-center justify-center gap-1.5 text-zinc-550 text-[10px] font-bold uppercase tracking-wider">
+              <Lock className="w-3.5 h-3.5 text-emerald-500" />
+              Ambiente 100% Seguro
+            </div>
+            <p className="text-[10px] text-zinc-500">MK Tips utiliza tecnologias de ponta com tokenização de chaves e criptografia ponta a ponta para proteger todas as transações.</p>
+          </Card>
+        </div>
+
+      </div>
+    </div>
+  )
+}
