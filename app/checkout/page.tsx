@@ -76,20 +76,8 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!db.isReady()) return
-    const u = db.getActiveUser()
-    setActiveUser(u)
-    if (u) {
-      const names = u.name.split(' ')
-      setFirstName(names[0] || '')
 
-      setLastName(names.slice(1).join(' ') || '')
-      setEmail(u.email || '')
-      setPhone(u.phone || '')
-      setCpf(u.cpf || '')
-      setUserWallet(db.getWallet(u.id))
-    }
-
-    // Parse search parameters
+    // Parse search parameters first
     const params = new URLSearchParams(window.location.search)
     captureReferralCodeFromUrl(window.location.search)
     const plan = params.get('plan')
@@ -97,12 +85,28 @@ export default function CheckoutPage() {
     const valetudo = params.get('valetudo')
     const deposit = params.get('deposit')
 
+    const isFree =
+      !!plan &&
+      (plan.toLowerCase() === 'free' ||
+        plan.toLowerCase().includes('gratis') ||
+        plan.toLowerCase().includes('gratuito'))
+
     if (plan) {
       setProductType('plan')
       setTargetId(plan)
-      if (plan.toLowerCase() === 'free' || plan.toLowerCase().includes('gratis') || plan.toLowerCase().includes('gratuito')) {
+      if (isFree) {
         setProductName('Teste Grátis — 7 dias')
         setBasePrice(0)
+        // Never prefill Free signup with Admin/Master or any session user
+        setActiveUser(null)
+        setFirstName('')
+        setLastName('')
+        setEmail('')
+        setPhone('')
+        setCpf('')
+        setFreePassword('')
+        setFreePasswordConfirm('')
+        setCep('')
       } else if (plan.toLowerCase().includes('starter')) {
         setProductName('Plano Starter Mensal')
         setBasePrice(49.90)
@@ -141,10 +145,27 @@ export default function CheckoutPage() {
       setProductName('Adicionar Saldo - MK Tips')
       setBasePrice(Number(deposit) || 50.00)
     } else {
-      // Default fallback
       setProductType('plan')
       setProductName('Plano Premium Mensal')
       setBasePrice(97.90)
+    }
+
+    // Autofill only for paid checkout + logged regular User (never Master/Admin)
+    if (!isFree) {
+      const session = localStorage.getItem('oddvault_user_session') === 'true'
+      if (session) {
+        const u = db.getActiveUser()
+        if (u?.id && u.role === 'User') {
+          setActiveUser(u)
+          const names = u.name.split(' ')
+          setFirstName(names[0] || '')
+          setLastName(names.slice(1).join(' ') || '')
+          setEmail(u.email || '')
+          setPhone(u.phone || '')
+          setCpf(u.cpf || '')
+          setUserWallet(db.getWallet(u.id))
+        }
+      }
     }
   }, [])
 
@@ -618,9 +639,10 @@ export default function CheckoutPage() {
                     <input
                       type="text"
                       required
-                      placeholder="Henrique"
+                      placeholder="Seu nome"
                       value={firstName}
                       onChange={e => setFirstName(e.target.value)}
+                      autoComplete="given-name"
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -629,9 +651,10 @@ export default function CheckoutPage() {
                     <input
                       type="text"
                       required
-                      placeholder="Blume"
+                      placeholder="Seu sobrenome"
                       value={lastName}
                       onChange={e => setLastName(e.target.value)}
+                      autoComplete="family-name"
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -640,9 +663,10 @@ export default function CheckoutPage() {
                     <input
                       type="email"
                       required
-                      placeholder="blume@example.com"
+                      placeholder="seu-email@exemplo.com"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
+                      autoComplete="email"
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -654,6 +678,7 @@ export default function CheckoutPage() {
                       placeholder="000.000.000-00"
                       value={cpf}
                       onChange={e => setCpf(e.target.value)}
+                      autoComplete="off"
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -665,6 +690,7 @@ export default function CheckoutPage() {
                       placeholder="(11) 99999-9999"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
+                      autoComplete="tel"
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
