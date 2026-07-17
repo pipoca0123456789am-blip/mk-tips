@@ -15,48 +15,86 @@ export default function AdminLoginPage() {
   const [attempts, setAttempts] = useState(0)
   const [locked, setLocked] = useState(false)
   const [error, setError] = useState('')
-  const [ip, setIp] = useState('189.120.45.10')
+  const [loading, setLoading] = useState(false)
+  const [ip, setIp] = useState('—')
 
   useEffect(() => {
-    // Session attempts cleared automatically
     sessionStorage.removeItem('admin_login_attempts')
     setLocked(false)
     setError('')
+    fetch('https://api.ipify.org?format=json')
+      .then((r) => r.json())
+      .then((d) => setIp(d.ip || '—'))
+      .catch(() => setIp('—'))
   }, [])
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (locked || loading) return
+    setLoading(true)
+    setError('')
 
-    // High fidelity credential validation
-    if (email === 'mktips@gmail.com' && password === '@Pipoca02') {
-      db.addLog('Auth', `Login administrador parte 1 concluído (IP: ${ip})`, ip)
-      setStep('2fa')
-      setError('')
-    } else {
-      const newAttempts = attempts + 1
-      setAttempts(newAttempts)
-      sessionStorage.setItem('admin_login_attempts', newAttempts.toString())
-      setError(`Credenciais incorretas. Tentativa ${newAttempts} de 5.`)
-      db.addLog('Error', `Falha na autenticação do admin com email: ${email} (IP: ${ip})`, ip)
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: 'login', email, password }),
+      })
+      const data = await res.json()
+
+      if (res.ok && data.ok) {
+        db.addLog('Auth', `Login administrador parte 1 concluído (IP: ${ip})`, ip)
+        setStep('2fa')
+        setPassword('')
+      } else {
+        const newAttempts = attempts + 1
+        setAttempts(newAttempts)
+        sessionStorage.setItem('admin_login_attempts', newAttempts.toString())
+        if (newAttempts >= 5) {
+          setLocked(true)
+          setError('Acesso bloqueado após 5 tentativas.')
+        } else {
+          setError(`Credenciais incorretas. Tentativa ${newAttempts} de 5.`)
+        }
+        db.addLog('Error', `Falha na autenticação do admin (IP: ${ip})`, ip)
+      }
+    } catch {
+      setError('Falha de conexão. Tente novamente.')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleTwoFactorSubmit = (e: React.FormEvent) => {
+  const handleTwoFactorSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Simulated 2FA validation (e.g. 123456 or any 6 digit code for convenience)
-    if (twoFactorCode === '123456' || twoFactorCode.length === 6) {
-      db.addLog('Auth', `Autenticação 2FA realizada com sucesso (IP: ${ip})`, ip)
-      // Save session
-      localStorage.setItem('oddvault_admin_session', 'true')
-      router.push('/mktipsadmin/dashboard')
-    } else {
-      setError('Código 2FA inválido. Use o código temporário 123456 para testes.')
+    if (loading) return
+    setLoading(true)
+    setError('')
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: '2fa', twoFactorCode }),
+      })
+      const data = await res.json()
+
+      if (res.ok && data.ok) {
+        db.addLog('Auth', `Autenticação 2FA realizada com sucesso (IP: ${ip})`, ip)
+        localStorage.setItem('oddvault_admin_session', 'true')
+        router.push('/mktipsadmin/dashboard')
+      } else {
+        setError(data.error || 'Código 2FA inválido.')
+      }
+    } catch {
+      setError('Falha de conexão. Tente novamente.')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Decorative gradients */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
 
@@ -81,7 +119,7 @@ export default function AdminLoginPage() {
           )}
 
           {step === 'login' ? (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <form onSubmit={handleLoginSubmit} className="space-y-4" autoComplete="off">
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
                   E-mail do Administrador
@@ -93,10 +131,12 @@ export default function AdminLoginPage() {
                   <input
                     type="email"
                     required
+                    name="admin-email"
+                    autoComplete="username"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="mktips@gmail.com"
-                    disabled={locked}
+                    placeholder="seu e-mail"
+                    disabled={locked || loading}
                     className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-zinc-600 text-sm"
                   />
                 </div>
@@ -113,10 +153,12 @@ export default function AdminLoginPage() {
                   <input
                     type="password"
                     required
+                    name="admin-password"
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    disabled={locked}
+                    disabled={locked || loading}
                     className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-zinc-600 text-sm"
                   />
                 </div>
@@ -129,16 +171,16 @@ export default function AdminLoginPage() {
 
               <button
                 type="submit"
-                disabled={locked}
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold rounded-lg transition-colors text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                disabled={locked || loading}
+                className="w-full min-h-[48px] py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-black font-semibold rounded-lg transition-colors text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
               >
-                Continuar
+                {loading ? 'Validando…' : 'Continuar'}
               </button>
             </form>
           ) : (
             <form onSubmit={handleTwoFactorSubmit} className="space-y-4">
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400 text-xs text-center">
-                Autenticação de Dois Fatores ativa. Insira o código gerado no seu app (use <strong className="font-bold">123456</strong> para acessar).
+                Autenticação de dois fatores ativa. Insira o código do seu autenticador.
               </div>
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
@@ -151,9 +193,10 @@ export default function AdminLoginPage() {
                   <input
                     type="text"
                     required
+                    inputMode="numeric"
                     maxLength={6}
                     value={twoFactorCode}
-                    onChange={(e) => setTwoFactorCode(e.target.value)}
+                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                     placeholder="000000"
                     className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-emerald-500 tracking-[0.3em] font-mono text-center text-lg placeholder:tracking-normal placeholder:font-sans"
                   />
@@ -163,16 +206,21 @@ export default function AdminLoginPage() {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setStep('login')}
-                  className="flex-1 py-3 bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold rounded-lg hover:bg-zinc-800 transition-colors text-sm cursor-pointer"
+                  onClick={() => {
+                    setStep('login')
+                    setTwoFactorCode('')
+                    setError('')
+                  }}
+                  className="flex-1 min-h-[48px] py-3 bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold rounded-lg hover:bg-zinc-800 transition-colors text-sm cursor-pointer"
                 >
                   Voltar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold rounded-lg transition-colors text-sm cursor-pointer shadow-lg shadow-emerald-500/20"
+                  disabled={loading}
+                  className="flex-1 min-h-[48px] py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-black font-semibold rounded-lg transition-colors text-sm cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
-                  Entrar
+                  {loading ? 'Entrando…' : 'Entrar'}
                 </button>
               </div>
             </form>

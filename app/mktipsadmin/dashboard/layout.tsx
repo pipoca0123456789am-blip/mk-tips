@@ -44,7 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
         <div className="truncate">
           <p className="text-xs font-semibold text-white">Admin Master</p>
-          <p className="truncate text-[10px] text-zinc-550">mktips@gmail.com</p>
+          <p className="truncate text-[10px] text-zinc-500">Administrador</p>
         </div>
       </div>
       <button
