@@ -626,7 +626,11 @@ export default function CheckoutPage() {
               </CardContent>
             </Card>
           ) : (
-            <form onSubmit={handleCheckoutProcess} className="space-y-6">
+            <form
+              onSubmit={handleCheckoutProcess}
+              className="space-y-6"
+              autoComplete={isFreeCheckout ? 'off' : 'on'}
+            >
               
               {/* Client Info Card */}
               <Card className="bg-zinc-950 border-zinc-850 text-xs">
@@ -642,7 +646,7 @@ export default function CheckoutPage() {
                       placeholder="Seu nome"
                       value={firstName}
                       onChange={e => setFirstName(e.target.value)}
-                      autoComplete="given-name"
+                      autoComplete={isFreeCheckout ? 'off' : 'given-name'}
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -654,7 +658,7 @@ export default function CheckoutPage() {
                       placeholder="Seu sobrenome"
                       value={lastName}
                       onChange={e => setLastName(e.target.value)}
-                      autoComplete="family-name"
+                      autoComplete={isFreeCheckout ? 'off' : 'family-name'}
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -666,7 +670,7 @@ export default function CheckoutPage() {
                       placeholder="seu-email@exemplo.com"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
-                      autoComplete="email"
+                      autoComplete={isFreeCheckout ? 'off' : 'email'}
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -690,7 +694,7 @@ export default function CheckoutPage() {
                       placeholder="(11) 99999-9999"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
-                      autoComplete="tel"
+                      autoComplete={isFreeCheckout ? 'off' : 'tel'}
                       className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 focus:outline-none transition-colors"
                     />
                   </div>
