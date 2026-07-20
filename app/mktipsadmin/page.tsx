@@ -82,6 +82,11 @@ export default function AdminLoginPage() {
       if (res.ok && data.ok) {
         db.addLog('Auth', `Autenticação 2FA realizada com sucesso (IP: ${ip})`, ip)
         localStorage.setItem('oddvault_admin_session', 'true')
+        // Don't mix admin with client session / PWA user area
+        localStorage.removeItem('oddvault_user_session')
+        await db.refresh()
+        const master = db.getUsers().find((u) => u.role === 'Master')
+        if (master) db.setActiveUser(master.id)
         router.push('/mktipsadmin/dashboard')
       } else {
         setError(data.error || 'Código 2FA inválido.')

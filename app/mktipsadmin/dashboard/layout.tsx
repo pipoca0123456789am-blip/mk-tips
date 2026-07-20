@@ -25,6 +25,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const handleLogout = () => {
     localStorage.removeItem('oddvault_admin_session')
+    // Keep admin out of the client PWA session
+    localStorage.removeItem('oddvault_user_session')
+    db.clearActiveUser()
     router.push('/mktipsadmin')
   }
 

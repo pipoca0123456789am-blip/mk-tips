@@ -67,6 +67,10 @@ export default function UserLoginPage() {
           <CardDescription className="text-zinc-400">
             Entre na sua conta para acompanhar as melhores tips do dia
           </CardDescription>
+          <p className="text-[10px] text-zinc-500 pt-1">
+            Conta teste: <span className="text-zinc-300 font-mono">teste@gmail.com</span> /{' '}
+            <span className="text-zinc-300 font-mono">teste123</span>
+          </p>
         </CardHeader>
         <CardContent className="space-y-6">
           {error && (

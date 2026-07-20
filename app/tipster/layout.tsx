@@ -17,10 +17,11 @@ export default function TipsterLayout({ children }: { children: React.ReactNode 
       if (!db.isReady()) return
       const activeUser = db.getActiveUser()
       setUser(activeUser)
-      setAllUsers(db.getUsers())
+      // Never list Master/Admin in tipster account switcher
+      setAllUsers(db.getUsers().filter((u) => u.role === 'Tipster' || u.role === 'User'))
 
       if (activeUser.role !== 'Tipster') {
-        if (activeUser.role === 'Master') {
+        if (['Master', 'Admin', 'Gerente'].includes(activeUser.role)) {
           router.push('/mktipsadmin/dashboard')
         } else {
           router.push('/dashboard')
@@ -43,6 +44,7 @@ export default function TipsterLayout({ children }: { children: React.ReactNode 
 
   const handleLogout = () => {
     localStorage.removeItem('oddvault_user_session')
+    db.clearActiveUser()
     window.location.href = '/'
   }
 
@@ -99,7 +101,7 @@ export default function TipsterLayout({ children }: { children: React.ReactNode 
           >
             {allUsers.map((u) => (
               <option key={u.id} value={u.id} className="bg-zinc-950 font-bold text-white">
-                {u.name} ({u.role === 'Master' ? 'Super Admin' : u.role})
+                {u.name} ({u.role})
               </option>
             ))}
           </select>

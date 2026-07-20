@@ -569,7 +569,11 @@ export const db = {
   // --- Sync Init Check ---
   isReady: () => _cache.initialized,
   waitForInit: () => ensureInit(),
-  refresh: async () => { await syncFromSupabase(); emitUpdate(); },
+  refresh: async () => {
+    await syncFromSupabase();
+    db.ensureDemoClientPassword();
+    emitUpdate();
+  },
 
   // --- Users ---
   getUsers: (): DBUser[] => _cache.users,
@@ -595,19 +599,113 @@ export const db = {
   },
 
   getActiveUser: (): DBUser => {
-    if (typeof window === 'undefined') return _cache.users[0] || { id: '', name: '', email: '', phone: '', city: '', country: '', language: 'pt-BR', plan: 'Free' as const, role: 'User' as const, status: 'Ativo' as const, createdAt: '', lastLogin: '', lastLoginIp: '', device: '', os: '', browser: '', daysRemaining: 0, revenueGenerated: 0, totalPaid: 0, lastPaymentDate: '', bankroll: 0, bankrollCurrency: 'R$', roiIndividual: 0 };
+    const empty: DBUser = {
+      id: '',
+      name: '',
+      email: '',
+      phone: '',
+      city: '',
+      country: '',
+      language: 'pt-BR',
+      plan: 'Free',
+      role: 'User',
+      status: 'Ativo',
+      createdAt: '',
+      lastLogin: '',
+      lastLoginIp: '',
+      device: '',
+      os: '',
+      browser: '',
+      daysRemaining: 0,
+      revenueGenerated: 0,
+      totalPaid: 0,
+      lastPaymentDate: '',
+      bankroll: 0,
+      bankrollCurrency: 'R$',
+      roiIndividual: 0,
+    };
+    if (typeof window === 'undefined') return empty;
+
+    const adminSession = localStorage.getItem('oddvault_admin_session') === 'true';
+    const userSession = localStorage.getItem('oddvault_user_session') === 'true';
     const activeId = localStorage.getItem(ACTIVE_USER_KEY);
+
     if (activeId) {
-      const found = _cache.users.find(u => u.id === activeId);
-      if (found) return found;
+      const found = _cache.users.find((u) => u.id === activeId);
+      if (found) {
+        const isStaff = ['Master', 'Admin', 'Gerente', 'Suporte', 'Financeiro', 'Moderador'].includes(
+          found.role,
+        );
+        // Staff identity only when admin session is active
+        if (isStaff && !adminSession) {
+          localStorage.removeItem(ACTIVE_USER_KEY);
+        } else if (!isStaff || adminSession) {
+          return found;
+        }
+      }
     }
-    // Never auto-pick Master/Admin for anonymous sessions
-    const firstMember = _cache.users.find(u => u.role === 'User' || u.role === 'Tipster');
-    const first = firstMember || _cache.users[0];
-    if (first) {
-      localStorage.setItem(ACTIVE_USER_KEY, first.id);
+
+    // Never auto-select Master/Admin for public/client sessions
+    if (userSession) {
+      const member = _cache.users.find((u) => u.role === 'User' || u.role === 'Tipster');
+      if (member) {
+        localStorage.setItem(ACTIVE_USER_KEY, member.id);
+        return member;
+      }
     }
-    return first || { id: '', name: 'Sem Usuário', email: '', phone: '', city: '', country: '', language: 'pt-BR', plan: 'Free' as const, role: 'User' as const, status: 'Ativo' as const, createdAt: '', lastLogin: '', lastLoginIp: '', device: '', os: '', browser: '', daysRemaining: 0, revenueGenerated: 0, totalPaid: 0, lastPaymentDate: '', bankroll: 0, bankrollCurrency: 'R$', roiIndividual: 0 };
+
+    return empty;
+  },
+
+  clearActiveUser: (): void => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(ACTIVE_USER_KEY);
+    }
+    emitUpdate();
+  },
+
+  ensureDemoClientPassword: (): void => {
+    if (typeof window === 'undefined') return;
+    let demo = _cache.users.find((u) => u.email.toLowerCase() === 'teste@gmail.com' && u.role === 'User');
+    if (!demo) {
+      demo = {
+        id: '11111111-1111-1111-1111-111111111111',
+        name: 'Cliente Teste',
+        email: 'teste@gmail.com',
+        phone: '11988888888',
+        city: 'São Paulo',
+        country: 'Brasil',
+        language: 'pt-BR',
+        plan: 'Premium',
+        role: 'User',
+        status: 'Ativo',
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        lastLoginIp: '127.0.0.1',
+        device: 'Mobile',
+        os: '',
+        browser: '',
+        daysRemaining: 30,
+        revenueGenerated: 0,
+        totalPaid: 97.9,
+        lastPaymentDate: new Date().toISOString(),
+        bankroll: 500,
+        bankrollCurrency: 'R$',
+        roiIndividual: 0,
+      };
+      _cache.users = [..._cache.users.filter((u) => u.email.toLowerCase() !== 'teste@gmail.com'), demo];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mktips_mock_users', JSON.stringify(_cache.users));
+      }
+      if (isSupabaseConfigured) {
+        supabase.from('users').upsert({ id: demo.id, ...mapUserToRow(demo) }, { onConflict: 'id' }).then();
+      }
+    }
+    const key = 'mktips_user_credentials';
+    const raw = localStorage.getItem(key);
+    const map = raw ? JSON.parse(raw) : {};
+    map['teste@gmail.com'] = 'teste123';
+    localStorage.setItem(key, JSON.stringify(map));
   },
 
   setUserPassword: (email: string, password: string): void => {

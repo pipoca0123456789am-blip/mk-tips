@@ -2,7 +2,7 @@
   "name": "MK TIPS Esportivas",
   "short_name": "MK TIPS",
   "description": "Plataforma SaaS premium de tips esportivas com ROI transparente e gestão de banca.",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0c1210",
   "theme_color": "#10B981",

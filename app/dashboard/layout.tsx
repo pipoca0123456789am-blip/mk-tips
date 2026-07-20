@@ -58,6 +58,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
       }
       await db.refresh()
+      const activeUser = db.getActiveUser()
+      const staffRoles = ['Master', 'Admin', 'Gerente', 'Suporte', 'Financeiro', 'Moderador']
+      if (!activeUser?.id || staffRoles.includes(activeUser.role)) {
+        // Staff must use /mktipsadmin — never the client dashboard
+        localStorage.removeItem('oddvault_user_session')
+        db.clearActiveUser()
+        if (localStorage.getItem('oddvault_admin_session') === 'true') {
+          router.replace('/mktipsadmin/dashboard')
+        } else {
+          router.replace('/login')
+        }
+        return
+      }
       handleUpdate()
     }
 
@@ -77,6 +90,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const handleLogout = () => {
     localStorage.removeItem('oddvault_user_session')
     localStorage.removeItem('oddvault_admin_session')
+    db.clearActiveUser()
     window.location.href = '/'
   }
 
