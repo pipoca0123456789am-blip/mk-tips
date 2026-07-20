@@ -1,16 +1,28 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { X, Smartphone, Bell, Share2, MoreVertical, Download } from 'lucide-react'
+import { X, Smartphone, Bell, Share2, MoreVertical, Download, Monitor } from 'lucide-react'
 
 type DeviceKind = 'android' | 'ios' | 'desktop'
 
+const SNOOZE_DAYS = 5
+const SNOOZE_MS = SNOOZE_DAYS * 24 * 60 * 60 * 1000
+const SNOOZE_KEY = 'oddvault_pwa_snooze'
+
 function detectDevice(): DeviceKind {
-  if (typeof window === 'undefined') return 'android'
+  if (typeof window === 'undefined') return 'desktop'
   const ua = window.navigator.userAgent.toLowerCase()
   if (/iphone|ipad|ipod/.test(ua)) return 'ios'
   if (/android/.test(ua)) return 'android'
   return 'desktop'
+}
+
+function isAppInstalled(): boolean {
+  if (typeof window === 'undefined') return false
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    !!(window.navigator as any).standalone
+  )
 }
 
 export function PwaInstallBanner() {
@@ -19,19 +31,24 @@ export function PwaInstallBanner() {
   const [pushSubscribed, setPushSubscribed] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
   const [showSplash, setShowSplash] = useState(false)
-  const [snoozeChecked, setSnoozeChecked] = useState(false)
-  const [device, setDevice] = useState<DeviceKind>('android')
+  const [device, setDevice] = useState<DeviceKind>('desktop')
   const [installHint, setInstallHint] = useState('')
   const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
-    const checkStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone
-    setIsStandalone(!!checkStandalone)
+    const installed = isAppInstalled()
+    setIsStandalone(installed)
     setDevice(detectDevice())
 
-    if (checkStandalone) {
+    // Migrate old "never show again" into a finite snooze
+    if (localStorage.getItem('oddvault_pwa_dismissed') === 'true') {
+      localStorage.removeItem('oddvault_pwa_dismissed')
+      if (!localStorage.getItem(SNOOZE_KEY)) {
+        localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS))
+      }
+    }
+
+    if (installed) {
       const splashShown = sessionStorage.getItem('oddvault_splash_shown')
       if (!splashShown) {
         setShowSplash(true)
@@ -43,9 +60,14 @@ export function PwaInstallBanner() {
   }, [])
 
   useEffect(() => {
+    // Never prompt if already installed (mobile OR desktop PWA)
+    if (isStandalone || isAppInstalled()) {
+      setShowBanner(false)
+      return
+    }
+
     const isLoggedIn = localStorage.getItem('oddvault_user_session') === 'true'
-    const shouldPrompt = localStorage.getItem('oddvault_pwa_show_after_login') === '1'
-    if (!isLoggedIn || !shouldPrompt) {
+    if (!isLoggedIn) {
       setShowBanner(false)
       return
     }
@@ -58,29 +80,35 @@ export function PwaInstallBanner() {
       if (Notification.permission === 'granted') setPushSubscribed(true)
     }
 
-    const snoozeTime = localStorage.getItem('oddvault_pwa_snooze')
-    const isSnoozed = snoozeTime && Date.now() < parseInt(snoozeTime)
-    const isDismissed = localStorage.getItem('oddvault_pwa_dismissed')
+    const snoozeUntil = parseInt(localStorage.getItem(SNOOZE_KEY) || '0', 10)
+    const isSnoozed = Number.isFinite(snoozeUntil) && Date.now() < snoozeUntil
+    if (isSnoozed) {
+      setShowBanner(false)
+      return
+    }
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e)
-      if (!isDismissed && !isStandalone && !isSnoozed) setShowBanner(true)
+      setShowBanner(true)
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
 
-    if (!isStandalone && !isDismissed && !isSnoozed) {
-      setShowBanner(true)
-    }
+    // Show on mobile AND desktop after login (if not installed / not snoozed)
+    setShowBanner(true)
+    localStorage.removeItem('oddvault_pwa_show_after_login')
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     }
   }, [isStandalone])
 
-  const clearLoginPromptFlag = () => {
+  const snoozePopup = () => {
+    localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS))
+    localStorage.removeItem('oddvault_pwa_dismissed')
     localStorage.removeItem('oddvault_pwa_show_after_login')
+    setShowBanner(false)
   }
 
   const handleInstall = async () => {
@@ -94,8 +122,13 @@ export function PwaInstallBanner() {
         setDeferredPrompt(null)
         if (outcome === 'accepted') {
           setShowBanner(false)
-          clearLoginPromptFlag()
-          setInstallHint('App instalado! Procure o ícone MK TIPS na tela inicial.')
+          localStorage.removeItem(SNOOZE_KEY)
+          localStorage.removeItem('oddvault_pwa_show_after_login')
+          setInstallHint(
+            device === 'desktop'
+              ? 'App instalado! Procure MK TIPS no menu Iniciar ou na área de trabalho.'
+              : 'App instalado! Procure o ícone MK TIPS na tela inicial.',
+          )
         } else {
           setInstallHint('Instalação cancelada. Você pode tentar de novo quando quiser.')
         }
@@ -104,39 +137,29 @@ export function PwaInstallBanner() {
 
       if (device === 'ios') {
         setInstallHint(
-          'No iPhone: toque em Compartilhar (□↑) → “Adicionar à Tela de Início” → Adicionar. O app aparece na tela inicial.'
+          'No iPhone: toque em Compartilhar (□↑) → “Adicionar à Tela de Início” → Adicionar.',
         )
         return
       }
 
       if (device === 'android') {
         setInstallHint(
-          'No Android: menu (⋮) → “Instalar aplicativo” ou “Adicionar à tela inicial” → Instalar.'
+          'No Android: menu (⋮) → “Instalar aplicativo” ou “Adicionar à tela inicial” → Instalar.',
         )
         return
       }
 
       setInstallHint(
-        'No Chrome/Edge: clique no ícone de instalar na barra de endereço (ou menu → Instalar MK TIPS).'
+        'No Chrome/Edge: clique no ícone de instalar na barra de endereço (ou menu → Instalar MK TIPS).',
       )
     } finally {
       setInstalling(false)
     }
   }
 
-  const handleDismiss = () => {
-    clearLoginPromptFlag()
-    if (snoozeChecked) {
-      localStorage.setItem('oddvault_pwa_snooze', (Date.now() + 7 * 24 * 60 * 60 * 1000).toString())
-    } else {
-      localStorage.setItem('oddvault_pwa_dismissed', 'true')
-    }
-    setShowBanner(false)
-  }
-
   const handleSubscribePush = () => {
     if (!('Notification' in window)) {
-      alert('Seu navegador não suporta notificações push.')
+      alert('Seu navegador nao suporta notificacoes push.')
       return
     }
 
@@ -205,12 +228,14 @@ export function PwaInstallBanner() {
             { icon: Smartphone, text: 'Confirme em Instalar — o ícone aparece na tela inicial.' },
           ]
         : [
-            { icon: Smartphone, text: 'Abra no Chrome ou Microsoft Edge.' },
-            { icon: Download, text: 'Clique no ícone de instalar na barra de endereço.' },
-            { icon: Smartphone, text: 'Confirme em Instalar — o atalho fica no desktop/menu iniciar.' },
+            { icon: Monitor, text: 'Abra no Google Chrome ou Microsoft Edge no computador.' },
+            { icon: Download, text: 'Clique no ícone de instalar na barra de endereço (lado direito).' },
+            { icon: Monitor, text: 'Confirme em Instalar — o atalho fica no Desktop / Menu Iniciar.' },
           ]
 
   const canNativeInstall = !!deferredPrompt
+  const deviceLabel =
+    device === 'ios' ? 'iPhone' : device === 'android' ? 'Android' : 'Computador'
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 overflow-y-auto">
@@ -225,19 +250,20 @@ export function PwaInstallBanner() {
             <div>
               <h3 className="text-base font-bold text-white">Instale o app MK TIPS</h3>
               <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
-                Siga o passo a passo e depois toque em Instalar. O app fica na tela do seu celular.
+                {device === 'desktop'
+                  ? 'Disponível no computador também. Siga o passo a passo e clique em Instalar.'
+                  : 'Siga o passo a passo e toque em Instalar. O app fica na tela do seu celular.'}
               </p>
             </div>
           </div>
-          <button onClick={handleDismiss} className="text-zinc-500 hover:text-white cursor-pointer p-1 shrink-0">
+          <button onClick={snoozePopup} className="text-zinc-500 hover:text-white cursor-pointer p-1 shrink-0">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div>
           <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block mb-2.5">
-            Passo a passo —{' '}
-            {device === 'ios' ? 'iPhone' : device === 'android' ? 'Android' : 'Computador'}
+            Passo a passo — {deviceLabel}
           </span>
           <div className="space-y-2.5">
             {steps.map((step, idx) => {
@@ -266,18 +292,9 @@ export function PwaInstallBanner() {
           </div>
         ) : null}
 
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="snooze"
-            checked={snoozeChecked}
-            onChange={(e) => setSnoozeChecked(e.target.checked)}
-            className="w-4 h-4 rounded border-zinc-800 bg-zinc-900 text-emerald-500 cursor-pointer"
-          />
-          <label htmlFor="snooze" className="text-zinc-400 font-medium select-none cursor-pointer text-[11px]">
-            Não mostrar novamente por 7 dias
-          </label>
-        </div>
+        <p className="text-[10px] text-zinc-500 leading-relaxed">
+          Se você escolher “Agora não”, o aviso volta em {SNOOZE_DAYS} dias — só se o app ainda não estiver instalado.
+        </p>
 
         <div className="flex flex-col gap-2 pt-1 border-t border-zinc-900">
           <button
@@ -289,17 +306,19 @@ export function PwaInstallBanner() {
             {installing
               ? 'Abrindo instalação…'
               : canNativeInstall
-                ? 'Instalar no celular'
+                ? device === 'desktop'
+                  ? 'Instalar no computador'
+                  : 'Instalar no celular'
                 : device === 'ios'
-                  ? 'Já vi os passos — como instalar'
+                  ? 'Como instalar no iPhone'
                   : 'Instalar app'}
           </button>
           <button
             type="button"
-            onClick={handleDismiss}
+            onClick={snoozePopup}
             className="w-full py-2.5 bg-transparent text-zinc-500 hover:text-zinc-300 font-bold rounded-xl cursor-pointer transition-colors text-[11px]"
           >
-            Agora não
+            Agora não (lembrar em {SNOOZE_DAYS} dias)
           </button>
         </div>
       </div>
