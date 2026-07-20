@@ -117,46 +117,27 @@ export function Checkout({ initialPlan = 'Premium', onClose }: CheckoutProps) {
     
     if (selectedPlan === 'Free') {
       setLoading(true)
-      setTimeout(() => {
-        const newUser: DBUser = {
-          id: crypto.randomUUID(),
-          name,
-          email,
-          phone,
-          cpf,
-          city: 'São Paulo',
-          country: 'Brasil',
-          language: 'pt-BR',
-          plan: 'Free',
-          role: 'User',
-          status: 'Ativo',
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
-          lastLoginIp: '127.0.0.1',
-          device: 'Web App',
-          os: 'Windows 11',
-          browser: 'Chrome 122',
-          daysRemaining: 7,
-          revenueGenerated: 0,
-          totalPaid: 0,
-          lastPaymentDate: '-',
-          bankroll: 0,
-          bankrollCurrency: 'R$',
-          roiIndividual: 0
+      ;(async () => {
+        try {
+          const newUser = await db.createFreeTrialUser({
+            name,
+            email,
+            phone,
+            cpf,
+            password,
+          })
+          db.attributePendingReferral({ id: newUser.id, name: newUser.name, plan: 'Free' })
+          db.setActiveUser(newUser.id)
+          localStorage.setItem('oddvault_user_session', 'true')
+          localStorage.setItem('oddvault_pwa_show_after_login', '1')
+          db.addLog('System', `Conta de teste grátis criada para ${email}`)
+          setStep(4)
+        } catch (err: any) {
+          alert(err?.message || 'Não foi possível criar a conta.')
+        } finally {
+          setLoading(false)
         }
-
-        const users = db.getUsers()
-        const filtered = users.filter(u => u.email !== email)
-        db.setUsers([newUser, ...filtered])
-        db.setUserPassword(email, password)
-        db.setActiveUser(newUser.id)
-        localStorage.setItem('oddvault_user_session', 'true')
-        localStorage.setItem('oddvault_pwa_show_after_login', '1')
-        db.addLog('System', `Conta de teste grátis criada para ${email}`)
-
-        setLoading(false)
-        setStep(4)
-      }, 1500)
+      })()
     } else {
       setStep(3)
     }
