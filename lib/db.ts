@@ -394,42 +394,18 @@ async function syncFromSupabase(): Promise<void> {
       bankrollCurrency: 'R$',
       roiIndividual: 0
     };
-    const defaultUser: DBUser = {
-      id: '11111111-1111-1111-1111-111111111111',
-      name: 'Henrique Blume',
-      email: 'teste@gmail.com',
-      phone: '11988888888',
-      city: 'São Paulo',
-      country: 'Brasil',
-      language: 'pt-BR',
-      plan: 'Free',
-      role: 'User',
-      status: 'Ativo',
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      lastLoginIp: '127.0.0.1',
-      device: 'PC',
-      os: 'Windows 11',
-      browser: 'Chrome',
-      daysRemaining: 7,
-      revenueGenerated: 0,
-      totalPaid: 0,
-      lastPaymentDate: '',
-      bankroll: 0,
-      bankrollCurrency: 'R$',
-      roiIndividual: 0
-    };
+    // No seeded client accounts — clients only via Free trial (7 days) or paid signup
 
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('mktips_mock_users');
       if (stored) {
         _cache.users = JSON.parse(stored);
       } else {
-        _cache.users = [defaultAdmin, defaultUser];
+        _cache.users = [defaultAdmin];
         localStorage.setItem('mktips_mock_users', JSON.stringify(_cache.users));
       }
     } else {
-      _cache.users = [defaultAdmin, defaultUser];
+      _cache.users = [defaultAdmin];
     }
     _cache.initialized = true;
     return;
@@ -571,7 +547,6 @@ export const db = {
   waitForInit: () => ensureInit(),
   refresh: async () => {
     await syncFromSupabase();
-    db.ensureDemoClientPassword();
     emitUpdate();
   },
 
@@ -662,50 +637,6 @@ export const db = {
       localStorage.removeItem(ACTIVE_USER_KEY);
     }
     emitUpdate();
-  },
-
-  ensureDemoClientPassword: (): void => {
-    if (typeof window === 'undefined') return;
-    let demo = _cache.users.find((u) => u.email.toLowerCase() === 'teste@gmail.com' && u.role === 'User');
-    if (!demo) {
-      demo = {
-        id: '11111111-1111-1111-1111-111111111111',
-        name: 'Cliente Teste',
-        email: 'teste@gmail.com',
-        phone: '11988888888',
-        city: 'São Paulo',
-        country: 'Brasil',
-        language: 'pt-BR',
-        plan: 'Premium',
-        role: 'User',
-        status: 'Ativo',
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        lastLoginIp: '127.0.0.1',
-        device: 'Mobile',
-        os: '',
-        browser: '',
-        daysRemaining: 30,
-        revenueGenerated: 0,
-        totalPaid: 97.9,
-        lastPaymentDate: new Date().toISOString(),
-        bankroll: 500,
-        bankrollCurrency: 'R$',
-        roiIndividual: 0,
-      };
-      _cache.users = [..._cache.users.filter((u) => u.email.toLowerCase() !== 'teste@gmail.com'), demo];
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('mktips_mock_users', JSON.stringify(_cache.users));
-      }
-      if (isSupabaseConfigured) {
-        supabase.from('users').upsert({ id: demo.id, ...mapUserToRow(demo) }, { onConflict: 'id' }).then();
-      }
-    }
-    const key = 'mktips_user_credentials';
-    const raw = localStorage.getItem(key);
-    const map = raw ? JSON.parse(raw) : {};
-    map['teste@gmail.com'] = 'teste123';
-    localStorage.setItem(key, JSON.stringify(map));
   },
 
   setUserPassword: (email: string, password: string): void => {
