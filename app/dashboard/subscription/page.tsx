@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { db, DBUser } from '@/lib/db'
+import { withReferralParam } from '@/lib/referral'
 import { CreditCard, ShieldCheck, Receipt, Sparkles, ArrowRight, ArrowLeft } from 'lucide-react'
 
 export default function UserSubscriptionPage() {
@@ -112,7 +113,7 @@ export default function UserSubscriptionPage() {
     let target = 'Premium'
     if (plan.id.includes('starter')) target = 'Starter'
     if (plan.id.includes('vip') || plan.id.includes('lifetime')) target = 'VIP Anual'
-    window.location.href = `/checkout?plan=${target}`
+    window.location.href = withReferralParam(`/checkout?plan=${target}`)
   }
 
   const confirmUpgrade = () => {

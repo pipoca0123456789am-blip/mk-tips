@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { LogIn, Mail, Lock, ArrowRight } from 'lucide-react'
 import { db } from '@/lib/db'
+import { captureReferralCodeFromUrl, withReferralParam } from '@/lib/referral'
 
 export default function UserLoginPage() {
   const router = useRouter()
@@ -13,6 +14,12 @@ export default function UserLoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [freeHref, setFreeHref] = useState('/checkout?plan=Free')
+
+  useEffect(() => {
+    captureReferralCodeFromUrl()
+    setFreeHref(withReferralParam('/checkout?plan=Free'))
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -128,7 +135,7 @@ export default function UserLoginPage() {
 
           <p className="text-center text-[11px] text-zinc-500">
             Não tem conta?{' '}
-            <Link href="/checkout?plan=Free" className="font-semibold text-emerald-400 hover:underline">
+            <Link href={freeHref} className="font-semibold text-emerald-400 hover:underline">
               Criar teste grátis (7 dias)
             </Link>
           </p>

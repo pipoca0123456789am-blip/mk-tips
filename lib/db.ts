@@ -7,6 +7,7 @@ import {
   getPendingReferralCode,
   clearPendingReferralCode,
   findUserIdByReferralCode,
+  captureReferralCodeFromUrl,
 } from './referral';
 
 // =============================================
@@ -994,19 +995,20 @@ export const db = {
   attributePendingReferral: (newUser: { id: string; name: string; plan: string }): boolean => {
     if (typeof window === 'undefined') return false
 
+    // Prefer ?ref= in URL, then stored code
+    captureReferralCodeFromUrl()
     const code = getPendingReferralCode()
     if (!code) return false
 
     const referrerId = findUserIdByReferralCode(_cache.users, code)
     if (!referrerId || referrerId === newUser.id) {
-      clearPendingReferralCode()
       return false
     }
 
     const already = _cache.referrals.some(
       (r: any) =>
         (r.referrer_id === referrerId || r.referrerId === referrerId) &&
-        r.name === newUser.name,
+        (r.name === newUser.name || r.referred_user_id === newUser.id),
     )
     if (!already) {
       db.addReferral({

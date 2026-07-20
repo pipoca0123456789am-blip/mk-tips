@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { db } from '@/lib/db'
-import { captureReferralCodeFromUrl } from '@/lib/referral'
+import { captureReferralCodeFromUrl, getPendingReferralCode, withReferralParam } from '@/lib/referral'
 import { 
   CreditCard, 
   QrCode, 
@@ -77,9 +77,15 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!db.isReady()) return
 
-    // Parse search parameters first
+    // Parse search parameters first — keep affiliate ?ref= visible + stored
     const params = new URLSearchParams(window.location.search)
-    captureReferralCodeFromUrl(window.location.search)
+    const captured = captureReferralCodeFromUrl(window.location.search)
+    const pendingRef = captured || getPendingReferralCode()
+    if (pendingRef && !params.get('ref')) {
+      params.set('ref', pendingRef)
+      const next = `${window.location.pathname}?${params.toString()}`
+      window.history.replaceState({}, '', next)
+    }
     const plan = params.get('plan')
     const challenge = params.get('challenge')
     const valetudo = params.get('valetudo')

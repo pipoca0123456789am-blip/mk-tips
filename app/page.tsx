@@ -14,7 +14,7 @@ import { Testimonials } from '@/components/landing/testimonials'
 import { Faq } from '@/components/landing/faq'
 import { Cta } from '@/components/landing/cta'
 import { Footer } from '@/components/landing/footer'
-import { captureReferralCodeFromUrl } from '@/lib/referral'
+import { captureReferralCodeFromUrl, getPendingReferralCode, withReferralParam } from '@/lib/referral'
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -43,16 +43,18 @@ export default function HomePage() {
       const params = new URLSearchParams(window.location.search)
       const p = params.get('plan')
       if (p) {
-        window.location.href = `/checkout?plan=${p}`
+        window.location.href = withReferralParam(`/checkout?plan=${encodeURIComponent(p)}`)
       }
     }
   }, [])
 
   const handleStartFree = () => {
-    window.location.href = '/checkout?plan=Free'
+    captureReferralCodeFromUrl()
+    window.location.href = withReferralParam('/checkout?plan=Free')
   }
   const handleSelectPlan = (plan: 'Free' | 'Starter' | 'Premium' | 'VIP Anual' | 'Elite') => {
-    window.location.href = `/checkout?plan=${plan}`
+    captureReferralCodeFromUrl()
+    window.location.href = withReferralParam(`/checkout?plan=${encodeURIComponent(plan)}`)
   }
 
   return (
