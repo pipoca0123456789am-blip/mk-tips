@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { ArrowRight, Check, Play, Smartphone, Monitor, Tablet } from 'lucide-react'
+import { ArrowRight, Check, Smartphone, Monitor, Tablet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 
@@ -64,14 +64,13 @@ export function Hero({ onStartFree }: { onStartFree: () => void }) {
                 Começar Agora
                 <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Button>
-              <a href="#video" className="w-full sm:w-auto">
+              <a href="#planos" className="w-full sm:w-auto">
                 <Button
                   size="lg"
                   variant="outline"
                   className="h-13 w-full border-zinc-850 bg-zinc-900/40 text-zinc-350 hover:text-white hover:bg-zinc-900 rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer transition-all"
                 >
-                  <Play className="mr-2 h-3.5 w-3.5 fill-current text-[#00E08A] border-none" />
-                  Conhecer a Plataforma
+                  Ver Planos
                 </Button>
               </a>
             </div>
