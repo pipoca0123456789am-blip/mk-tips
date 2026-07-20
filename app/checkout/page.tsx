@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { db } from '@/lib/db'
-import { captureReferralCodeFromUrl, getPendingReferralCode, withReferralParam } from '@/lib/referral'
+import { captureReferralCodeFromUrl, getPendingReferralCode } from '@/lib/referral'
 import { 
   CreditCard, 
   QrCode, 
