@@ -1,11 +1,13 @@
-const CACHE_NAME = 'oddvault-cache-v1';
+const CACHE_NAME = 'mktips-cache-v2';
 const OFFLINE_URL = '/offline.html';
 
 const ASSETS_TO_CACHE = [
   '/',
   '/offline.html',
   '/manifest.json',
-  '/icon.svg',
+  '/logo-mktips.png',
+  '/icon-192.png',
+  '/icon-512.png',
   '/apple-icon.png'
 ];
 

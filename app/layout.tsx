@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'MK TIPS' }],
   creator: 'MK TIPS',
-  generator: 'v0.app',
+  generator: 'Next.js',
   openGraph: {
     type: 'website',
     locale: 'pt_BR',
@@ -61,8 +61,12 @@ export const metadata: Metadata = {
     canonical: SITE_URL,
   },
   icons: {
-    icon: '/logo-mktips.png',
-    apple: '/logo-mktips.png',
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180', type: 'image/png' }],
+    shortcut: '/icon-192.png',
   },
   manifest: '/manifest.json',
   appleWebApp: {
