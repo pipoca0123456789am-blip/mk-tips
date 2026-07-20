@@ -28,7 +28,7 @@ export default function UserLoginPage() {
 
     try {
       await db.refresh()
-      const result = db.loginWithCredentials(email.trim(), password)
+      const result = await db.loginWithCredentialsAsync(email.trim(), password)
       if (!result.ok || !result.user) {
         setError(result.error || 'E-mail ou senha incorretos.')
         return

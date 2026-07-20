@@ -39,6 +39,15 @@ export default function AdminUsersPage() {
       setActiveUser(db.getActiveUser())
     }
     load()
+    const onUpdate = () => setUsers(db.getUsers())
+    window.addEventListener('oddvault_db_update', onUpdate)
+    const interval = setInterval(() => {
+      db.refresh().then(() => setUsers(db.getUsers()))
+    }, 15000)
+    return () => {
+      window.removeEventListener('oddvault_db_update', onUpdate)
+      clearInterval(interval)
+    }
   }, [])
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -199,4 +199,15 @@ CREATE POLICY "public_all" ON challenge_stages FOR ALL USING (true) WITH CHECK (
 
 -- Seed Admin
 INSERT INTO users (name, email, phone, city, country, language, plan, role, status, days_remaining)
-VALUES ('Admin Master', 'admin@mktips.com', '+55 (11) 99999-9999', 'Curitiba', 'Brasil', 'pt-BR', 'VIP Anual', 'Master', 'Ativo', 365);
+VALUES ('Admin Master', 'admin@mktips.com', '+55 (11) 99999-9999', 'Curitiba', 'Brasil', 'pt-BR', 'VIP Anual', 'Master', 'Ativo', 365)
+ON CONFLICT (email) DO NOTHING;
+
+-- Credentials for client login (service role / public policies)
+CREATE TABLE IF NOT EXISTS user_credentials (
+  email TEXT PRIMARY KEY,
+  password TEXT NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE user_credentials ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_all" ON user_credentials FOR ALL USING (true) WITH CHECK (true);

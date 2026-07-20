@@ -261,14 +261,22 @@ export default function CheckoutPage() {
           return
         }
 
-        const newUser = db.createFreeTrialUser({
-          name: `${firstName} ${lastName}`.trim(),
-          email: email.trim(),
-          phone,
-          cpf,
-          password: freePassword,
-        })
+        let newUser
+        try {
+          newUser = await db.createFreeTrialUser({
+            name: `${firstName} ${lastName}`.trim(),
+            email: email.trim(),
+            phone,
+            cpf,
+            password: freePassword,
+          })
+        } catch (err: any) {
+          alert(err?.message || 'Não foi possível criar a conta. Tente novamente.')
+          setLoadingPayment(false)
+          return
+        }
 
+        // Local attribution backup (API already tries server-side)
         db.attributePendingReferral({
           id: newUser.id,
           name: newUser.name,

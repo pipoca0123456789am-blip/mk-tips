@@ -568,7 +568,13 @@ export const db = {
     // Write-through async (fire-and-forget)
     if (isSupabaseConfigured) {
       for (const user of sorted) {
-        supabase.from('users').upsert({ id: user.id, ...mapUserToRow(user) }, { onConflict: 'id' }).then();
+        const row = { id: user.id, created_at: user.createdAt || undefined, ...mapUserToRow(user) };
+        supabase
+          .from('users')
+          .upsert(row, { onConflict: 'id' })
+          .then(({ error }) => {
+            if (error) console.error('users upsert error:', error.message, user.email);
+          });
       }
     }
     emitUpdate();
@@ -669,12 +675,47 @@ export const db = {
       if (stored && stored !== password) {
         return { ok: false, error: 'E-mail ou senha incorretos.' };
       }
-      // If no password stored yet, require creating one via Free signup / register
       if (!stored) {
         return { ok: false, error: 'Conta sem senha. Crie o teste grátis ou redefina pelo suporte.' };
       }
     }
     return { ok: true, user };
+  },
+
+  loginWithCredentialsAsync: async (
+    email: string,
+    password: string,
+  ): Promise<{ ok: boolean; user?: DBUser; error?: string }> => {
+    // Prefer local credentials first (fast)
+    const local = db.loginWithCredentials(email, password);
+    if (local.ok) return local;
+
+    // Fallback: server credentials (works across devices after Free signup)
+    try {
+      const res = await fetch('/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok && data.user) {
+        const user = mapUserFromRow(data.user);
+        const withoutDup = _cache.users.filter((u) => u.id !== user.id && u.email.toLowerCase() !== user.email.toLowerCase());
+        _cache.users = [...withoutDup, user];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('mktips_mock_users', JSON.stringify(_cache.users));
+          db.setUserPassword(user.email, password);
+        }
+        emitUpdate();
+        return { ok: true, user };
+      }
+      if (data.error && data.error !== 'NO_SERVER_PASSWORD') {
+        return { ok: false, error: data.error };
+      }
+    } catch {
+      /* fall through */
+    }
+    return local;
   },
 
   isFreeTrialExpired: (user: DBUser): boolean => {
@@ -705,41 +746,42 @@ export const db = {
     db.setUsers(updated);
   },
 
-  createFreeTrialUser: (payload: {
+  createFreeTrialUser: async (payload: {
     name: string;
     email: string;
     phone?: string;
     cpf?: string;
     password: string;
-  }): DBUser => {
-    const newUser: DBUser = {
-      id: crypto.randomUUID(),
-      name: payload.name,
-      email: payload.email.trim(),
-      phone: payload.phone || '',
-      city: '',
-      country: 'Brasil',
-      language: 'pt-BR',
-      plan: 'Free',
-      role: 'User',
-      status: 'Ativo',
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      lastLoginIp: '0.0.0.0',
-      device: 'Web App',
-      os: '',
-      browser: '',
-      daysRemaining: 7,
-      revenueGenerated: 0,
-      totalPaid: 0,
-      lastPaymentDate: '',
-      bankroll: 0,
-      bankrollCurrency: 'R$',
-      roiIndividual: 0,
-      cpf: payload.cpf || '',
-    };
-    db.setUsers([..._cache.users, newUser]);
+    referrerCode?: string | null;
+  }): Promise<DBUser> => {
+    const res = await fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: payload.name,
+        email: payload.email,
+        phone: payload.phone || '',
+        cpf: payload.cpf || '',
+        password: payload.password,
+        plan: 'Free',
+        referrerCode: payload.referrerCode || getPendingReferralCode(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok || !data.user) {
+      throw new Error(data.error || 'Falha ao criar conta no banco.');
+    }
+
+    const newUser = mapUserFromRow(data.user);
+    const withoutDup = _cache.users.filter(
+      (u) => u.email.toLowerCase() !== newUser.email.toLowerCase() && u.id !== newUser.id,
+    );
+    _cache.users = [...withoutDup, newUser];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mktips_mock_users', JSON.stringify(_cache.users));
+    }
     db.setUserPassword(newUser.email, payload.password);
+    emitUpdate();
     return newUser;
   },
 
