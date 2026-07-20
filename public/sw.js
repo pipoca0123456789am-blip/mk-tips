@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mktips-cache-v2';
+const CACHE_NAME = 'mktips-cache-v3';
 const OFFLINE_URL = '/offline.html';
 
 const ASSETS_TO_CACHE = [
@@ -6,9 +6,13 @@ const ASSETS_TO_CACHE = [
   '/offline.html',
   '/manifest.json',
   '/logo-mktips.png',
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/favicon-48x48.png',
   '/icon-192.png',
   '/icon-512.png',
-  '/apple-icon.png'
+  '/apple-icon.png',
+  '/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {
