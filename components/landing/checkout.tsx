@@ -145,47 +145,74 @@ export function Checkout({ initialPlan = 'Premium', onClose }: CheckoutProps) {
 
   const handlePayment = () => {
     setLoading(true)
-    setTimeout(() => {
-      // Create user in simulated local db
-      const newUser: DBUser = {
-        id: crypto.randomUUID(),
-        name,
-        email,
-        phone,
-        cpf,
-        city: 'São Paulo',
-        country: 'Brasil',
-        language: 'pt-BR',
-        plan: selectedPlan === 'Free' ? 'Free' : selectedPlan,
-        role: 'User',
-        status: 'Ativo',
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        lastLoginIp: '127.0.0.1',
-        device: 'Web App',
-        os: 'Windows 11',
-        browser: 'Chrome 122',
-        daysRemaining: selectedPlan === 'VIP Anual' ? 365 : 30,
-        revenueGenerated: selectedPlan === 'VIP Anual' ? 497.90 : selectedPlan === 'Premium' ? 97.90 : 49.90,
-        totalPaid: selectedPlan === 'VIP Anual' ? 497.90 : selectedPlan === 'Premium' ? 97.90 : 49.90,
-        lastPaymentDate: new Date().toISOString(),
-        bankroll: 0,
-        bankrollCurrency: 'R$',
-        roiIndividual: 0
+    ;(async () => {
+      try {
+        const amount =
+          selectedPlan === 'VIP Anual' ? 497.9 : selectedPlan === 'Premium' ? 97.9 : 49.9
+        const res = await fetch('/api/payments/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            name,
+            phone,
+            cpf,
+            amount,
+            plan: selectedPlan,
+            productType: 'plan',
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok || !data.ok || !data.user) {
+          throw new Error(data.error || 'Falha ao registrar pagamento')
+        }
+
+        const synced = data.user
+        const newUser: DBUser = {
+          id: synced.id,
+          name: synced.name || name,
+          email: synced.email || email,
+          phone: synced.phone || phone,
+          cpf: synced.cpf || cpf,
+          city: synced.city || 'São Paulo',
+          country: synced.country || 'Brasil',
+          language: synced.language || 'pt-BR',
+          plan: synced.plan || selectedPlan,
+          role: 'User',
+          status: 'Ativo',
+          createdAt: synced.created_at || new Date().toISOString(),
+          lastLogin: synced.last_login || new Date().toISOString(),
+          lastLoginIp: synced.last_login_ip || '127.0.0.1',
+          device: synced.device || 'Web App',
+          os: synced.os || '',
+          browser: synced.browser || '',
+          daysRemaining: Number(synced.days_remaining) || (selectedPlan === 'VIP Anual' ? 365 : 30),
+          revenueGenerated: Number(synced.revenue_generated) || amount,
+          totalPaid: Number(synced.total_paid) || amount,
+          lastPaymentDate: synced.last_payment_date || new Date().toISOString(),
+          bankroll: Number(synced.bankroll) || 0,
+          bankrollCurrency: synced.bankroll_currency || 'R$',
+          roiIndividual: Number(synced.roi_individual) || 0,
+        }
+
+        const users = db.getUsers()
+        const filtered = users.filter((u) => u.email.toLowerCase() !== email.toLowerCase() && u.id !== newUser.id)
+        db.setUsers([newUser, ...filtered])
+        db.setActiveUser(newUser.id)
+        localStorage.setItem('oddvault_user_session', 'true')
+        localStorage.setItem('oddvault_pwa_show_after_login', '1')
+        db.attributePendingReferral({ id: newUser.id, name: newUser.name, plan: String(newUser.plan) })
+        db.addLog(
+          'Payment',
+          `Pagamento aprovado via ${paymentMethod.toUpperCase()} para plano ${selectedPlan} (${email})`,
+        )
+        setStep(4)
+      } catch (err: any) {
+        alert(err?.message || 'Erro ao confirmar pagamento.')
+      } finally {
+        setLoading(false)
       }
-
-      const users = db.getUsers()
-      // Remove any existing user to simulate login clean
-      const filtered = users.filter(u => u.email !== email)
-      db.setUsers([newUser, ...filtered])
-      db.setActiveUser(newUser.id)
-      localStorage.setItem('oddvault_user_session', 'true')
-      localStorage.setItem('oddvault_pwa_show_after_login', '1')
-      db.addLog('Payment', `Pagamento aprovado via ${paymentMethod.toUpperCase()} para plano ${selectedPlan} (${email})`)
-
-      setLoading(false)
-      setStep(4)
-    }, 2000)
+    })()
   }
 
   return (

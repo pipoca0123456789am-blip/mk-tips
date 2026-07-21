@@ -24,21 +24,34 @@ export default function AdminDashboardPage() {
   const [activeUsersCount, setActiveUsersCount] = useState(0)
 
   useEffect(() => {
-    const load = () => {
-      if (!db.isReady()) return
+    const load = async () => {
+      await db.refresh()
       const u = db.getUsers()
       const t = db.getTips()
       const ts = db.getTipsters()
       setUsers(u)
       setTips(t)
       setTipsters(ts)
-      setActiveUsersCount(u.filter(usr => usr.status === 'Ativo').length)
+      setActiveUsersCount(u.filter((usr) => usr.status === 'Ativo').length)
       setLoading(false)
     }
 
     load()
-    window.addEventListener('oddvault_db_update', load)
-    return () => window.removeEventListener('oddvault_db_update', load)
+    const onUpdate = () => {
+      const u = db.getUsers()
+      setUsers(u)
+      setTips(db.getTips())
+      setTipsters(db.getTipsters())
+      setActiveUsersCount(u.filter((usr) => usr.status === 'Ativo').length)
+    }
+    window.addEventListener('oddvault_db_update', onUpdate)
+    const interval = setInterval(() => {
+      db.refresh().then(onUpdate)
+    }, 20000)
+    return () => {
+      window.removeEventListener('oddvault_db_update', onUpdate)
+      clearInterval(interval)
+    }
   }, [])
 
   if (loading) {

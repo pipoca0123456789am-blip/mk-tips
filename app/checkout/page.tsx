@@ -301,8 +301,7 @@ export default function CheckoutPage() {
           available: walletAvailable - finalPrice
         }
         db.setWallet(activeUser.id, updatedWallet)
-        applyPurchaseBenefits()
-        
+        await applyPurchaseBenefits()
         db.addLog('Payment', `Compra de ${productName} no valor de R$ ${finalPrice.toFixed(2)} paga integralmente com saldo da Carteira.`, deviceIP, userDevice, activeUser.name)
         
         setPaymentSuccess(true)
@@ -359,9 +358,9 @@ export default function CheckoutPage() {
         const data = await res.json()
         
         // Simulating immediate credit card authorization check
-        setTimeout(() => {
-          applyPurchaseBenefits()
-          db.addLog('Payment', `Compra de ${productName} no valor de R$ ${finalPrice.toFixed(2)} aprovada via Cartão de Crédito ${detectedBrand} (Final ${cardNumber.slice(-4) || '4242'}).`, deviceIP, userDevice, activeUser.name)
+        setTimeout(async () => {
+          await applyPurchaseBenefits()
+          db.addLog('Payment', `Compra de ${productName} no valor de R$ ${finalPrice.toFixed(2)} aprovada via Cartão de Crédito ${detectedBrand} (Final ${cardNumber.slice(-4) || '4242'}).`, deviceIP, userDevice, activeUser?.name || `${firstName} ${lastName}`.trim())
           setPaymentSuccess(true)
           setLoadingPayment(false)
         }, 1500)
@@ -389,10 +388,10 @@ export default function CheckoutPage() {
           db.setWallet(activeUser.id, updatedWallet)
         }
         
-        applyPurchaseBenefits()
+        await applyPurchaseBenefits()
         
         const userDevice = typeof window !== 'undefined' ? window.navigator.userAgent : 'Unknown'
-        db.addLog('Payment', `Depósito/Compra de R$ ${finalPrice.toFixed(2)} aprovada via Velana Pix. ID: ${transactionId}`, '177.45.198.24', userDevice, activeUser?.name || 'Cliente')
+        db.addLog('Payment', `Depósito/Compra de R$ ${finalPrice.toFixed(2)} aprovada via Velana Pix. ID: ${transactionId}`, '177.45.198.24', userDevice, activeUser?.name || `${firstName} ${lastName}`.trim() || 'Cliente')
         
         setPaymentSuccess(true)
         setShowPixScreen(false)
@@ -424,10 +423,87 @@ export default function CheckoutPage() {
     return () => clearInterval(interval)
   }, [showPixScreen, transactionId, paymentMethod, canPayFullyWithWallet, userWallet, activeUser, finalPrice])
 
-  const applyPurchaseBenefits = () => {
-    if (!activeUser) return
+  const applyPurchaseBenefits = async () => {
+    const payerEmail = (email || activeUser?.email || '').trim().toLowerCase()
+    const payerName = `${firstName} ${lastName}`.trim() || activeUser?.name || ''
+    if (!payerEmail) return
 
-    // 1. Appends upsell if ticked
+    let resolvedPlan =
+      productType === 'plan'
+        ? targetId.toLowerCase().includes('starter')
+          ? 'Starter'
+          : targetId.toLowerCase().includes('vip')
+            ? 'VIP Anual'
+            : targetId.toLowerCase().includes('free')
+              ? 'Free'
+              : 'Premium'
+        : null
+
+    // Persist revenue + plan on Supabase (admin panel reads this)
+    try {
+      const res = await fetch('/api/payments/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: payerEmail,
+          name: payerName,
+          phone,
+          cpf,
+          amount: finalPrice,
+          plan: resolvedPlan,
+          productType,
+          transactionId: transactionId || null,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.ok && data.user) {
+        const synced = {
+          id: data.user.id,
+          name: data.user.name || payerName,
+          email: data.user.email || payerEmail,
+          phone: data.user.phone || phone,
+          cpf: data.user.cpf || cpf,
+          city: data.user.city || '',
+          country: data.user.country || 'Brasil',
+          language: data.user.language || 'pt-BR',
+          plan: data.user.plan || resolvedPlan || 'Premium',
+          role: data.user.role || 'User',
+          status: data.user.status || 'Ativo',
+          createdAt: data.user.created_at || new Date().toISOString(),
+          lastLogin: data.user.last_login || new Date().toISOString(),
+          lastLoginIp: data.user.last_login_ip || '',
+          device: data.user.device || 'Web App',
+          os: data.user.os || '',
+          browser: data.user.browser || '',
+          daysRemaining: Number(data.user.days_remaining) || 30,
+          revenueGenerated: Number(data.user.revenue_generated) || finalPrice,
+          totalPaid: Number(data.user.total_paid) || finalPrice,
+          lastPaymentDate: data.user.last_payment_date || new Date().toISOString(),
+          bankroll: Number(data.user.bankroll) || 0,
+          bankrollCurrency: data.user.bankroll_currency || 'R$',
+          roiIndividual: Number(data.user.roi_individual) || 0,
+        }
+        const others = db.getUsers().filter((u) => u.id !== synced.id && u.email.toLowerCase() !== synced.email.toLowerCase())
+        db.setUsers([...others, synced as any])
+        db.setActiveUser(synced.id)
+        localStorage.setItem('oddvault_user_session', 'true')
+        setActiveUser(synced)
+
+        if (productType === 'plan') {
+          db.attributePendingReferral({
+            id: synced.id,
+            name: synced.name,
+            plan: String(synced.plan),
+          })
+        }
+      } else {
+        console.error('payment confirm failed:', data)
+      }
+    } catch (err) {
+      console.error('payment confirm error:', err)
+    }
+
+    // Local extras (upsell / challenge / deposit wallet)
     if (includeUpsell) {
       const curChallenges = db.getPurchasedChallenges()
       if (!curChallenges.includes('starter')) {
@@ -435,41 +511,19 @@ export default function CheckoutPage() {
       }
     }
 
-    // 2. Deliver main product benefit
-    let resolvedPlan = activeUser.plan as string
-    if (productType === 'plan') {
-      const users = db.getUsers()
-      const updated = users.map((u: any) => {
-        if (u.id === activeUser.id) {
-          resolvedPlan = targetId.includes('starter')
-            ? 'Starter'
-            : targetId.includes('vip')
-              ? 'VIP Anual'
-              : 'Premium'
-          return {
-            ...u,
-            plan: resolvedPlan,
-            daysRemaining: targetId.includes('vip') ? 365 : 30
-          }
-        }
-        return u
-      })
-      db.setUsers(updated)
-    } else if (productType === 'challenge') {
+    if (productType === 'challenge') {
       const curChallenges = db.getPurchasedChallenges()
       if (!curChallenges.includes(targetId)) {
         db.setPurchasedChallenges([...curChallenges, targetId])
       }
-    } else if (productType === 'deposit') {
+    } else if (productType === 'deposit' && activeUser?.id) {
       const curWallet = db.getWallet(activeUser.id)
       const updatedWallet = {
         ...curWallet,
         available: curWallet.available + basePrice,
-        totalDeposit: curWallet.totalDeposit + basePrice
+        totalDeposit: curWallet.totalDeposit + basePrice,
       }
       db.setWallet(activeUser.id, updatedWallet)
-      
-      // Also write transactions
       const txs = db.getWalletTransactions(activeUser.id)
       const newTx = {
         id: `tx-${Date.now()}`,
@@ -478,18 +532,9 @@ export default function CheckoutPage() {
         date: new Date().toISOString().split('T')[0],
         time: new Date().toLocaleTimeString().slice(0, 5),
         status: 'Aprovado',
-        txId: transactionId || `TX-VEL-${Date.now().toString().slice(-6)}`
+        txId: transactionId || `TX-VEL-${Date.now().toString().slice(-6)}`,
       }
       db.setWalletTransactions(activeUser.id, [newTx, ...txs])
-    }
-
-    // 3. Attribute affiliate referral if visitor came via ?ref=
-    if (productType === 'plan') {
-      db.attributePendingReferral({
-        id: activeUser.id,
-        name: activeUser.name || `${firstName} ${lastName}`.trim(),
-        plan: resolvedPlan || productName || 'Starter',
-      })
     }
   }
 
