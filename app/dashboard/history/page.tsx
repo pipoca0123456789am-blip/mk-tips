@@ -7,12 +7,28 @@ import { db, DBTip } from '@/lib/db'
 export default function UserHistoryPage() {
   const [history, setHistory] = useState<DBTip[]>([])
   const [statusFilter, setStatusFilter] = useState<'Todos' | 'Green' | 'Red' | 'Void'>('Todos')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Filter history resolved items
-    const resolved = db.getTips().filter(t => t.status !== 'Pendente')
-    setHistory(resolved)
+    const load = async () => {
+      await db.refresh()
+      const resolved = db.getTips().filter((t) => t.status !== 'Pendente')
+      setHistory(resolved)
+      setLoading(false)
+    }
+    load()
+    const onUpdate = () => load()
+    window.addEventListener('oddvault_db_update', onUpdate)
+    return () => window.removeEventListener('oddvault_db_update', onUpdate)
   }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-6 h-6 border-2 border-[#00E08A] border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   const filteredHistory = statusFilter === 'Todos'
     ? history

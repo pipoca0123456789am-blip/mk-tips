@@ -101,20 +101,7 @@ export default function AdminTipsPage() {
     db.addAuditLog('Admin Master', 'CREATE_TIP', newTip.id, '', `${match} - ${market}`)
     db.addLog('Audit', `Tip ${match} criada com sucesso para ${market}`, '189.120.45.10', 'MacBook Pro', 'Admin Master')
 
-    try {
-      await fetch('/api/whatsapp/queue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'push',
-          campaignId: `tip-${newTip.id}`,
-          campaignName: `Disparo Tip: ${newTip.match} (${newTip.market})`,
-          total: 280
-        })
-      })
-    } catch (err) {
-      console.error(err)
-    }
+    // Disparo WhatsApp desligado até ativar sendToWhatsApp no pipeline / CRM
 
     // Reset
     setLeague('')
@@ -141,6 +128,7 @@ export default function AdminTipsPage() {
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-white">Tips Control</h1>
           <p className="text-sm text-zinc-400">Publique novas tips, defina justificativas e finalize com Green, Red ou Void.</p>
+          <p className="text-[10px] mt-1 text-amber-400/90 font-medium">WhatsApp comunidades: desligado — ative depois em config/auto-pipeline.json</p>
         </div>
           <div className="flex items-center gap-2">
             <button

@@ -213,7 +213,16 @@ async function main() {
     console.log(`2) Inseridas ${inserted.length} tips Pendentes.`)
   }
 
+  // WhatsApp / comunidades — só envia se sendToWhatsApp: true em config/auto-pipeline.json
+  const whatsappEnabled = cfg.sendToWhatsApp === true
+
   // Também pega tips pendentes recentes ainda não enviadas
+  if (!whatsappEnabled) {
+    console.log('3) WhatsApp desligado (sendToWhatsApp=false). Nenhuma mensagem nas comunidades.')
+    console.log('Pronto.')
+    return
+  }
+
   const { data: toBroadcast } = await supabase
     .from('tips')
     .select('*')

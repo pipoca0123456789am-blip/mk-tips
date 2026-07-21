@@ -15,18 +15,38 @@ export default function UserTipsPage() {
   const [comparingTip, setComparingTip] = useState<DBTip | null>(null)
 
   const [user, setUser] = useState<DBUser | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const currentUser = db.getActiveUser()
-    setUser(currentUser)
+    const load = async () => {
+      await db.refresh()
+      const currentUser = db.getActiveUser()
+      setUser(currentUser)
 
-    const allActiveTips = db.getTips().filter(t => t.status === 'Pendente')
-    const filteredTips = currentUser.tipsterId
-      ? allActiveTips.filter(t => t.tipsterId === currentUser.tipsterId)
-      : allActiveTips
-    setTips(filteredTips)
-    setFavorites(db.getFavorites())
+      const allActiveTips = db.getTips().filter((t) => t.status === 'Pendente')
+      const filteredTips = currentUser?.tipsterId
+        ? allActiveTips.filter((t) => t.tipsterId === currentUser.tipsterId)
+        : allActiveTips
+      setTips(filteredTips)
+      setFavorites(db.getFavorites())
+      setLoading(false)
+    }
+
+    load()
+    const onUpdate = () => {
+      load()
+    }
+    window.addEventListener('oddvault_db_update', onUpdate)
+    return () => window.removeEventListener('oddvault_db_update', onUpdate)
   }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-6 h-6 border-2 border-[#00E08A] border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   const handleFavorite = (tipId: string) => {
     let nextFavs = [...favorites]

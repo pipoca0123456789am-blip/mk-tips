@@ -265,6 +265,7 @@ export default function WhatsAppCrmPage() {
     { id: 'g-2', name: 'MK VIP Brasileirão Série A', membersCount: 828, communityId: 'c-1', communityName: 'Grupo VIP de Tips Oficiais', description: 'Tips para o Campeonato Brasileiro' }
   ])
   const [contacts, setContacts] = useState<WAContact[]>([])
+  const [communityContactStats, setCommunityContactStats] = useState<{ total: number; uniquePhones: number } | null>(null)
   const [queue, setQueue] = useState<WAQueueItem[]>([])
   const [automations, setAutomations] = useState<WAAutomation[]>([
     { id: 'aut-1', name: 'Disparo de Novas Tips', trigger: 'new_tip', templateId: 'tpl-1', sessionId: 'sess-1', targetType: 'community', targetIds: ['c-1', 'c-3'], active: true, firedCount: 12 },
@@ -294,37 +295,59 @@ export default function WhatsAppCrmPage() {
   const [aiPrompt, setAiPrompt] = useState('')
   const [loadingAi, setLoadingAi] = useState(false)
 
-  // Sync contacts from db.getUsers()
-  const syncContactsFromDatabase = useCallback(() => {
+  // Contatos: prioriza lista real das comunidades (sync via script no PC)
+  const syncContactsFromDatabase = useCallback(async () => {
+    try {
+      const res = await fetch('/api/community-contacts', { cache: 'no-store' })
+      const payload = await res.json()
+      if (payload?.ok && Array.isArray(payload.contacts) && payload.contacts.length > 0) {
+        setContacts(payload.contacts as WAContact[])
+        setCommunityContactStats({
+          total: payload.total ?? payload.contacts.length,
+          uniquePhones: payload.uniquePhones ?? payload.contacts.length,
+        })
+        setStats((prev) =>
+          prev
+            ? {
+                ...prev,
+                participants: payload.uniquePhones ?? payload.contacts.length,
+              }
+            : prev,
+        )
+        return
+      }
+      setCommunityContactStats(null)
+    } catch {
+      setCommunityContactStats(null)
+    }
+
     if (!db.isReady()) return
     const dbUsers = db.getUsers()
-    const active = dbUsers.filter((u: any) => u.status === 'Ativo')
     const mapped: WAContact[] = dbUsers.map((u: any) => {
       const isLeft = u.status === 'Bloqueado'
       return {
         id: u.id,
         name: u.name || 'Assinante MK TIPS',
-        phone: u.phone || '+55 11 99999-0000',
+        phone: u.phone || '',
         hasWhatsApp: true,
         tags: [u.plan, u.role].filter(Boolean),
         plan: u.plan,
         tipster: 'Sistema',
-        origin: 'Registrado',
-        communityId: isLeft ? null : 'c-1',
-        communityName: isLeft ? null : 'Grupo VIP de Tips Oficiais',
-        status: isLeft ? 'left' : 'active'
+        origin: 'Registrado no app',
+        communityId: isLeft ? null : null,
+        communityName: isLeft ? null : null,
+        status: isLeft ? 'left' : 'active',
       } as any
     })
     setContacts(mapped)
-
-    // Update participants count in stats
-    setStats(prev => {
-      if (!prev) return null
-      return {
-        ...prev,
-        participants: mapped.filter(c => (c as any).status === 'active').length
-      }
-    })
+    setStats((prev) =>
+      prev
+        ? {
+            ...prev,
+            participants: mapped.filter((c) => (c as any).status === 'active').length,
+          }
+        : prev,
+    )
   }, [])
 
   // Sync and monitor
@@ -858,31 +881,45 @@ export default function WhatsAppCrmPage() {
     // ── CONTATOS ──
     if (tab === 'contatos') return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-white">Contatos</h3>
-          <div className="flex gap-2">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm rounded-lg transition-colors"><Filter className="w-3.5 h-3.5" /> Filtrar</button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors"><Plus className="w-3.5 h-3.5" /> Novo</button>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h3 className="font-semibold text-white">Clientes das comunidades</h3>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Lista importada do WhatsApp (somente leitura — nenhuma mensagem enviada).
+            </p>
+            {communityContactStats && (
+              <p className="text-[10px] text-emerald-400 mt-1">
+                {communityContactStats.uniquePhones} números únicos · {communityContactStats.total} vínculos com comunidades
+              </p>
+            )}
           </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => syncContactsFromDatabase()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Atualizar lista
+            </button>
+          </div>
+        </div>
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/80 p-3 text-xs text-zinc-400">
+          No PC (uma vez ou quando quiser atualizar):{' '}
+          <code className="text-emerald-400/90">node --env-file=.env.local scripts/sync-community-contacts.mjs</code>
         </div>
         <div className="relative"><Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar contato..." className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50" /></div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-zinc-800 text-xs text-zinc-500"><th className="text-left p-3 pl-4">Nome</th><th className="text-left p-3">Telefone</th><th className="text-left p-3">Plano</th><th className="text-left p-3">Tags</th><th className="text-left p-3">WA</th><th className="p-3"></th></tr></thead>
+            <thead><tr className="border-b border-zinc-800 text-xs text-zinc-500"><th className="text-left p-3 pl-4">Nome</th><th className="text-left p-3">Telefone</th><th className="text-left p-3">Comunidade</th><th className="text-left p-3">Origem</th><th className="text-left p-3">Tags</th><th className="text-left p-3">WA</th></tr></thead>
             <tbody>
               {(filtered(contacts) as WAContact[]).map((c, i) => (
                 <tr key={c.id} className={`border-b border-zinc-800/50 hover:bg-zinc-800/50 transition-colors ${i % 2 === 0 ? '' : 'bg-zinc-900/50'}`}>
                   <td className="p-3 pl-4 font-medium text-white">{c.name}</td>
                   <td className="p-3 text-zinc-400 font-mono text-xs">{c.phone}</td>
-                  <td className="p-3"><span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{c.plan ?? '—'}</span></td>
+                  <td className="p-3 text-zinc-300 text-xs">{(c as any).communityName ?? '—'}</td>
+                  <td className="p-3 text-zinc-500 text-xs">{(c as any).origin ?? '—'}</td>
                   <td className="p-3"><div className="flex gap-1 flex-wrap">{c.tags.map(t => <span key={t} className="text-xs px-1.5 py-0.5 bg-zinc-700 text-zinc-300 rounded">{t}</span>)}</div></td>
                   <td className="p-3">{c.hasWhatsApp ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <XCircle className="w-4 h-4 text-red-400" />}</td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <button className="p-1 text-zinc-500 hover:text-white"><Send className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => deleteContact(c.id)} className="p-1 text-red-400 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>

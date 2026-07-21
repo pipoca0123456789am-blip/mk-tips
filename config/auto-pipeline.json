@@ -12,9 +12,13 @@
     { "id": "4346", "name": "Ligue 1" }
   ],
   "targets": [
-    "Comunidade 1",
-    "Comunidade 3",
-    "Comunidade 4"
+    "120363299429334282@g.us",
+    "120363301038187408@g.us",
+    "120363318730585881@g.us",
+    "120363333837031761@g.us",
+    "120363319783630529@g.us",
+    "120363338812848977@g.us"
   ],
+  "sendToWhatsApp": false,
   "dryRun": false
 }

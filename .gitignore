@@ -11,6 +11,11 @@ __v0_jsx-dev-runtime.ts
 
 # Auto pipeline local state
 config/.auto-pipeline-state.json
+config/wacli-qr.png
+config/wacli-qr-payload.txt
+config/wacli-auth-events.ndjson
+config/wacli-auth-out.txt
+config/community-contacts-export.json
 
 # Common ignores
 node_modules
