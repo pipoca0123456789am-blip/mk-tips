@@ -99,9 +99,45 @@ export default function AdminDashboardPage() {
     ? users.filter(u => u.totalPaid > 0).slice(0, 7).map(u => ({ label: u.name.split(' ')[0], value: u.totalPaid }))
     : [{ label: 'Sem dados', value: 0 }]
 
-  const growthChartData = users.length > 0
-    ? users.slice(0, 7).map((u, idx) => ({ label: new Date(u.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), value: idx + 1 }))
-    : [{ label: 'Hoje', value: 0 }]
+  // Crescimento real por dia (últimos 30 dias, total acumulado)
+  const growthChartData = (() => {
+    const days = 30
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const startWindow = new Date(today)
+    startWindow.setDate(startWindow.getDate() - (days - 1))
+
+    const signupsByDay = new Map<string, number>()
+    let beforeWindow = 0
+
+    for (const u of users) {
+      if (!u.createdAt) continue
+      const created = new Date(u.createdAt)
+      if (Number.isNaN(created.getTime())) continue
+      created.setHours(0, 0, 0, 0)
+      if (created < startWindow) {
+        beforeWindow += 1
+        continue
+      }
+      const key = created.toISOString().slice(0, 10)
+      signupsByDay.set(key, (signupsByDay.get(key) || 0) + 1)
+    }
+
+    const points: { label: string; value: number }[] = []
+    let cumulative = beforeWindow
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      cumulative += signupsByDay.get(key) || 0
+      points.push({
+        label: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        value: cumulative,
+      })
+    }
+    return points
+  })()
 
   const funnelData = [
     { stage: 'Visitantes', value: users.length * 3 },
@@ -149,7 +185,7 @@ export default function AdminDashboardPage() {
           <AreaChart data={revenueChartData} height={240} color="#00E08A" title="Faturamento de Assinaturas" subtitle="Valores por assinante cadastrado" />
         </div>
         <div>
-          <AreaChart data={growthChartData} height={240} color="#3B82F6" title="Crescimento de Assinantes" subtitle="Total de usuários cadastrados" />
+          <AreaChart data={growthChartData} height={240} color="#3B82F6" title="Crescimento de Assinantes" subtitle="Total acumulado por dia (últimos 30 dias)" />
         </div>
       </div>
 
