@@ -256,7 +256,7 @@ function mapTipToRow(tip: Partial<DBTip>): any {
   if (tip.confidence !== undefined) row.confidence = tip.confidence;
   if (tip.recommendedBookmaker !== undefined) row.recommended_bookmaker = tip.recommendedBookmaker;
   if (tip.affiliateUrl !== undefined) row.affiliate_url = tip.affiliateUrl;
-  if (tip.tipsterId !== undefined) row.tipster_id = tip.tipsterId;
+  if (tip.tipsterId !== undefined) row.tipster_id = tip.tipsterId || null;
   if (tip.tipsterName !== undefined) row.tipster_name = tip.tipsterName;
   if (tip.justification !== undefined) row.justification = tip.justification;
   if (tip.riskIndicators !== undefined) row.risk_indicators = tip.riskIndicators;
@@ -468,6 +468,9 @@ async function syncFromSupabase(): Promise<void> {
     }
 
     _cache.tipsters = (tipstersRes.data || []).map(mapTipsterFromRow);
+    if (tipsRes.error) {
+      console.error('Tips sync error:', tipsRes.error.message);
+    }
     _cache.tips = (tipsRes.data || []).map(mapTipFromRow);
     _cache.logs = (logsRes.data || []).map(mapLogFromRow);
     _cache.auditLogs = (auditRes.data || []).map(mapAuditLogFromRow);

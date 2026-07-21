@@ -7,6 +7,7 @@ import { PlusCircle, HelpCircle, Check, X, Ban, Trash2 } from 'lucide-react'
 
 export default function AdminTipsPage() {
   const [tips, setTips] = useState<DBTip[]>([])
+  const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
 
   // Creation form fields
@@ -22,7 +23,20 @@ export default function AdminTipsPage() {
   const [justification, setJustification] = useState('')
 
   useEffect(() => {
-    setTips(db.getTips())
+    let cancelled = false
+    const load = async () => {
+      await db.refresh()
+      if (cancelled) return
+      setTips(db.getTips())
+      setLoading(false)
+    }
+    load()
+    const onUpdate = () => setTips(db.getTips())
+    window.addEventListener('oddvault_db_update', onUpdate)
+    return () => {
+      cancelled = true
+      window.removeEventListener('oddvault_db_update', onUpdate)
+    }
   }, [])
 
   const handleResolveTip = (tipId: string, result: 'Green' | 'Red' | 'Void' | 'Cancelada') => {
@@ -53,7 +67,7 @@ export default function AdminTipsPage() {
     if (!league || !match || !market || !type) return
 
     const newTip: DBTip = {
-      id: `tip-${Date.now()}`,
+      id: crypto.randomUUID(),
       sport,
       league,
       match,
@@ -65,8 +79,8 @@ export default function AdminTipsPage() {
       confidence,
       recommendedBookmaker: bookmaker,
       affiliateUrl: affiliate,
-      tipsterId: 't1',
-      tipsterName: 'Felipe "Galo" Silva',
+      tipsterId: '',
+      tipsterName: 'MK Tips',
       justification,
       riskIndicators: ['Cenário de flutuação de odds antes do evento'],
       estimatedProbability: Math.floor(95 / odd), // EV conversion probability
@@ -112,6 +126,14 @@ export default function AdminTipsPage() {
     setShowAddModal(false)
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-6 h-6 border-2 border-[#00E08A] border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Title block */}
@@ -131,6 +153,13 @@ export default function AdminTipsPage() {
 
       {/* Grid listing */}
       <div className="grid grid-cols-1 gap-4">
+        {tips.length === 0 && (
+          <Card className="border-zinc-850 bg-zinc-900/30">
+            <CardContent className="p-8 text-center text-sm text-zinc-500">
+              Nenhuma oportunidade cadastrada ainda. Clique em <strong className="text-zinc-300">Publicar Oportunidade</strong> para criar a primeira.
+            </CardContent>
+          </Card>
+        )}
         {tips.map(tip => (
           <Card key={tip.id} className="border-zinc-850 bg-zinc-900/30 overflow-hidden">
             <div className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
