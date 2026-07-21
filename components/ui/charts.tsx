@@ -163,6 +163,8 @@ export function AreaChart({ data, height = 220, color = COLORS.emerald, title, s
           tickLine={false}
           axisLine={false}
           tick={{ fill: '#71717a', fontSize: 10, fontWeight: 600 }}
+          interval={data.length > 14 ? Math.ceil(data.length / 7) - 1 : 0}
+          minTickGap={8}
         />
         <YAxis
           tickLine={false}
