@@ -133,20 +133,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Best-effort payment log table (optional — ignore if table missing)
-    try {
-      await admin.from('payments').insert({
-        id: crypto.randomUUID(),
-        user_id: user.id,
-        email,
-        amount,
-        plan: resolvedPlan || productType,
-        product_type: productType,
-        transaction_id: transactionId,
-        status: 'paid',
-        created_at: now,
-      })
-    } catch {
-      /* optional table */
+    const { error: payLogErr } = await admin.from('payments').insert({
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      email,
+      amount,
+      plan: resolvedPlan || productType,
+      product_type: productType,
+      transaction_id: transactionId,
+      status: 'paid',
+      created_at: now,
+    })
+    if (payLogErr) {
+      console.warn('payments log skipped:', payLogErr.message)
     }
 
     return NextResponse.json({ ok: true, user })

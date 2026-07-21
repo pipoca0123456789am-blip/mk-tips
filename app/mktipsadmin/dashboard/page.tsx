@@ -20,8 +20,26 @@ export default function AdminDashboardPage() {
   const [users, setUsers] = useState<DBUser[]>([])
   const [tips, setTips] = useState<DBTip[]>([])
   const [tipsters, setTipsters] = useState<DBTipster[]>([])
+  const [payments, setPayments] = useState<{ amount: number; created_at: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [activeUsersCount, setActiveUsersCount] = useState(0)
+
+  const loadPayments = useCallback(async () => {
+    try {
+      const res = await fetch('/api/payments')
+      const data = await res.json()
+      if (data?.ok && Array.isArray(data.payments)) {
+        setPayments(
+          data.payments.map((p: { amount?: number; created_at?: string }) => ({
+            amount: Number(p.amount) || 0,
+            created_at: String(p.created_at || ''),
+          })),
+        )
+      }
+    } catch {
+      /* optional */
+    }
+  }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -33,6 +51,7 @@ export default function AdminDashboardPage() {
       setTips(t)
       setTipsters(ts)
       setActiveUsersCount(u.filter((usr) => usr.status === 'Ativo').length)
+      await loadPayments()
       setLoading(false)
     }
 
@@ -43,6 +62,7 @@ export default function AdminDashboardPage() {
       setTips(db.getTips())
       setTipsters(db.getTipsters())
       setActiveUsersCount(u.filter((usr) => usr.status === 'Ativo').length)
+      loadPayments()
     }
     window.addEventListener('oddvault_db_update', onUpdate)
     const interval = setInterval(() => {
@@ -52,7 +72,7 @@ export default function AdminDashboardPage() {
       window.removeEventListener('oddvault_db_update', onUpdate)
       clearInterval(interval)
     }
-  }, [])
+  }, [loadPayments])
 
   if (loading) {
     return (
@@ -95,9 +115,63 @@ export default function AdminDashboardPage() {
     { label: 'Pendentes', value: pendingTips.toString(), desc: 'Aguardando fim', color: 'text-[#F59E0B]' }
   ]
 
-  const revenueChartData = users.length > 0 && users.some(u => u.totalPaid > 0)
-    ? users.filter(u => u.totalPaid > 0).slice(0, 7).map(u => ({ label: u.name.split(' ')[0], value: u.totalPaid }))
-    : [{ label: 'Sem dados', value: 0 }]
+  // Faturamento real por dia (últimos 30 dias, receita acumulada)
+  const revenueChartData = (() => {
+    const days = 30
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const startWindow = new Date(today)
+    startWindow.setDate(startWindow.getDate() - (days - 1))
+
+    const paidByDay = new Map<string, number>()
+    let beforeWindow = 0
+
+    const attribute = (amount: number, rawDate: string | undefined) => {
+      if (amount <= 0) return
+      if (!rawDate) {
+        beforeWindow += amount
+        return
+      }
+      const paidAt = new Date(rawDate)
+      if (Number.isNaN(paidAt.getTime())) {
+        beforeWindow += amount
+        return
+      }
+      paidAt.setHours(0, 0, 0, 0)
+      if (paidAt < startWindow) {
+        beforeWindow += amount
+        return
+      }
+      const key = paidAt.toISOString().slice(0, 10)
+      paidByDay.set(key, (paidByDay.get(key) || 0) + amount)
+    }
+
+    // Preferência: log de pagamentos (mais preciso com múltiplas compras)
+    if (payments.length > 0) {
+      for (const p of payments) {
+        attribute(Number(p.amount) || 0, p.created_at)
+      }
+    } else {
+      for (const u of users) {
+        attribute(Number(u.totalPaid) || 0, u.lastPaymentDate || u.createdAt)
+      }
+    }
+
+    const points: { label: string; value: number }[] = []
+    let cumulative = beforeWindow
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      cumulative += paidByDay.get(key) || 0
+      points.push({
+        label: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        value: Number(cumulative.toFixed(2)),
+      })
+    }
+    return points
+  })()
 
   // Crescimento real por dia (últimos 30 dias, total acumulado)
   const growthChartData = (() => {
@@ -182,7 +256,7 @@ export default function AdminDashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <AreaChart data={revenueChartData} height={240} color="#00E08A" title="Faturamento de Assinaturas" subtitle="Valores por assinante cadastrado" />
+          <AreaChart data={revenueChartData} height={240} color="#00E08A" title="Faturamento de Assinaturas" subtitle="Receita acumulada por dia (últimos 30 dias)" />
         </div>
         <div>
           <AreaChart data={growthChartData} height={240} color="#3B82F6" title="Crescimento de Assinantes" subtitle="Total acumulado por dia (últimos 30 dias)" />
