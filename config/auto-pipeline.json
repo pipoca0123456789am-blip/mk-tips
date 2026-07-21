@@ -1,0 +1,20 @@
+{
+  "account": "me",
+  "appUrl": "https://saa-s-sports-tips-three.vercel.app/dashboard/tips",
+  "bookmaker": "Betano",
+  "defaultOdd": 1.85,
+  "maxTipsPerRun": 8,
+  "leagues": [
+    { "id": "4328", "name": "Premier League" },
+    { "id": "4335", "name": "La Liga" },
+    { "id": "4332", "name": "Serie A" },
+    { "id": "4331", "name": "Bundesliga" },
+    { "id": "4346", "name": "Ligue 1" }
+  ],
+  "targets": [
+    "Comunidade 1",
+    "Comunidade 3",
+    "Comunidade 4"
+  ],
+  "dryRun": false
+}

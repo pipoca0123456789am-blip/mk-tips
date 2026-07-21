@@ -142,13 +142,39 @@ export default function AdminTipsPage() {
           <h1 className="text-3xl font-extrabold tracking-tight text-white">Tips Control</h1>
           <p className="text-sm text-zinc-400">Publique novas tips, defina justificativas e finalize com Green, Red ou Void.</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-black text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-lg shadow-emerald-500/10"
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          Publicar Oportunidade
-        </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/tips/auto-import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ maxTips: 8, broadcast: false }),
+                  })
+                  const data = await res.json()
+                  if (!data.ok) {
+                    alert(data.error || 'Falha ao importar')
+                    return
+                  }
+                  await db.refresh()
+                  setTips(db.getTips())
+                  alert(data.inserted > 0 ? `${data.inserted} oportunidades importadas.` : 'Nenhum jogo novo.')
+                } catch (e: any) {
+                  alert(e?.message || 'Erro no auto-import')
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+            >
+              Importar jogos futuros
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-black text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-lg shadow-emerald-500/10"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              Publicar Oportunidade
+            </button>
+          </div>
       </div>
 
       {/* Grid listing */}
